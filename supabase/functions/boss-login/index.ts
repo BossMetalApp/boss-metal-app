@@ -139,30 +139,14 @@ if (errorPin) {
 }
 
     if (!valido) {
-      const intentos = (cuenta.intentos_fallidos ?? 0) + 1;
-      const bloqueo = intentos >= 5
-        ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
-        : null;
-
-      const { error: updateError } = await db
-        .from("boss_usuarios")
-        .update({
-          intentos_fallidos: intentos >= 5 ? 0 : intentos,
-          bloqueado_hasta: bloqueo,
-        })
-        .eq("id", cuenta.id);
-
-      if (updateError) {
-        return reply({ ok: false, mensaje: "Error de autenticación" }, 500);
-      }
-
-      return reply({
-        ok: false,
-        mensaje: bloqueo
-          ? "Acceso bloqueado durante 15 minutos"
-          : "Credenciales inválidas",
-      }, bloqueo ? 429 : 401);
-    }
+  return reply(
+    {
+      ok: false,
+      mensaje: "Credenciales inválidas o acceso bloqueado temporalmente"
+    },
+    401
+  );
+}
 
     const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
     const token = Array.from(tokenBytes)
