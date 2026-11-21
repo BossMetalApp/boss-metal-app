@@ -1,12 +1,17 @@
-
 name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
 
+concurrency:
+  group: boss-metal-supabase
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: syixumzybwcqumaszzqa
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -16,9 +21,52 @@ jobs:
         with:
           version: latest
 
+      - name: Aplicar y verificar esquema de supervisores
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            printf 'begin;\n'
+            cat supabase/migrations/20261121230000_boss_acarreos.sql
+            cat supabase/migrations/20261121230500_boss_crear_supervisor.sql
+            cat <<'SQL'
+          do $$
+          declare
+            nombre text := 'PruebaDeploy_' || substr(md5(random()::text), 1, 10);
+          begin
+            perform public.boss_crear_supervisor(nombre, '7419');
+            if public.boss_verificar_pin(nombre, '7419') is distinct from true then
+              raise exception 'El verificador no admite la cuenta de supervisor';
+            end if;
+            delete from public.boss_usuarios where usuario = nombre;
+          end;
+          $$;
+          commit;
+          SQL
+          } | jq -Rs '{query: .}' | curl --fail-with-body --silent --show-error \
+            --request POST --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header 'Content-Type: application/json' --data-binary @- \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query"
+
+      - name: Desplegar boss-acarreos
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy boss-acarreos --no-verify-jwt \
+            --project-ref "$SUPABASE_PROJECT_REF" --yes
+
       - name: Desplegar boss-login
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase functions deploy boss-login \
-            --project-ref syixumzybwcqumaszzqa --yes
+          supabase functions deploy boss-login --no-verify-jwt \
+            --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - name: Verificar que acarreo exige una sesión
+        run: |
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"accion":"listar"}' \
+            "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/boss-acarreos")"
+          test "$status" = 401
