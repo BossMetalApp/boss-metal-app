@@ -38,7 +38,7 @@ jobs:
           set local role service_role;
           select public.boss_crear_supervisor(current_setting('boss.deploy_test_user'), '7419');
           reset role;
-          do $
+          do $$
           declare
             nombre text := current_setting('boss.deploy_test_user');
           begin
