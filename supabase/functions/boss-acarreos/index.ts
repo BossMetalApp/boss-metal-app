@@ -67,6 +67,39 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (body?.accion === "listar_supervisores" || body?.accion === "crear_supervisor" || body?.accion === "estado_supervisor") {
+      if (!admin) return reply({ ok: false, mensaje: "Solo administradores" }, 403);
+      if (body.accion === "listar_supervisores") {
+        const { data, error } = await db.from("boss_usuarios").select("usuario,activo")
+          .eq("rol", "supervisor").order("usuario");
+        if (error) throw error;
+        return reply({ ok: true, supervisores: data });
+      }
+
+      const user = body.usuario;
+      if (typeof user !== "string" || !/^[A-Za-z0-9_][A-Za-z0-9_.-]{2,39}$/.test(user) ||
+          ["admin", "admin2"].includes(user.toLowerCase())) {
+        return reply({ ok: false, mensaje: "Nombre de usuario inválido" }, 400);
+      }
+
+      if (body.accion === "crear_supervisor") {
+        if (typeof body.pin !== "string" || !/^[0-9]{4}$/.test(body.pin)) {
+          return reply({ ok: false, mensaje: "El PIN debe tener cuatro dígitos" }, 400);
+        }
+        const { error } = await db.rpc("boss_crear_supervisor", { p_usuario: user, p_pin: body.pin });
+        if (error?.code === "23505") return reply({ ok: false, mensaje: "Ese usuario ya existe" }, 409);
+        if (error) throw error;
+        return reply({ ok: true }, 201);
+      }
+
+      if (typeof body.activo !== "boolean") return reply({ ok: false, mensaje: "Estado inválido" }, 400);
+      const { data, error } = await db.from("boss_usuarios").update({ activo: body.activo })
+        .eq("usuario", user).eq("rol", "supervisor").select("usuario").maybeSingle();
+      if (error) throw error;
+      if (!data) return reply({ ok: false, mensaje: "Supervisor no encontrado" }, 404);
+      return reply({ ok: true });
+    }
+
     if (body?.accion === "listar") {
       const offset = body.offset ?? 0;
       if (!Number.isSafeInteger(offset) || offset < 0 ||
