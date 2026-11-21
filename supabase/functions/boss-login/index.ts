@@ -1,9 +1,8 @@
-
 Deno.serve((_req: Request) => {
   return new Response(
     JSON.stringify({
       ok: false,
-      mensaje: "Autenticacion en preparacion"
+      mensaje: "Autenticación en preparación"
     }),
     {
       status: 503,
@@ -14,4 +13,3 @@ Deno.serve((_req: Request) => {
     }
   );
 });
-
