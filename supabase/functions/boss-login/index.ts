@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     if (
       typeof usuario !== "string" ||
       typeof pin !== "string" ||
-      !["Admin", "Admin2"].includes(usuario) ||
+      !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,39}$/.test(usuario) ||
       !/^\d{4}$/.test(pin)
     ) {
       return reply({ ok: false, mensaje: "Credenciales inválidas" }, 401);
@@ -113,7 +113,10 @@ Deno.serve(async (req) => {
       return reply({ ok: false, mensaje: "Error de autenticación" }, 500);
     }
 
-    if (!cuenta || !cuenta.activo || !cuenta.pin_hash) {
+    if (
+      !cuenta || !cuenta.activo || !cuenta.pin_hash ||
+      (!["Admin", "Admin2"].includes(cuenta.usuario) && cuenta.rol !== "supervisor")
+    ) {
       return reply({ ok: false, mensaje: "Credenciales inválidas" }, 401);
     }
 
