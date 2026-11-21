@@ -2,6 +2,9 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches: [corregir-alta-supervisor]
+    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
@@ -31,17 +34,21 @@ jobs:
             cat supabase/migrations/20261121230000_boss_acarreos.sql
             cat supabase/migrations/20261121230500_boss_crear_supervisor.sql
             cat <<'SQL'
-          do $$
+          select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
+          set local role service_role;
+          select public.boss_crear_supervisor(current_setting('boss.deploy_test_user'), '7419');
+          reset role;
+          do $
           declare
-            nombre text := 'PruebaDeploy_' || substr(md5(random()::text), 1, 10);
+            nombre text := current_setting('boss.deploy_test_user');
           begin
-            perform public.boss_crear_supervisor(nombre, '7419');
             if public.boss_verificar_pin(nombre, '7419') is distinct from true then
               raise exception 'El verificador no admite la cuenta de supervisor';
             end if;
             delete from public.boss_usuarios where usuario = nombre;
           end;
           $$;
+          notify pgrst, 'reload schema';
           commit;
           SQL
           } | jq -Rs '{query: .}' | curl --fail-with-body --silent --show-error \
