@@ -1,7 +1,7 @@
 create or replace function public.boss_crear_supervisor(p_usuario text, p_pin text)
 returns void
 language plpgsql
-security invoker
+security definer
 set search_path = pg_catalog, extensions, public
 as $$
 begin
