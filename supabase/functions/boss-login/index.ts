@@ -129,8 +129,14 @@ Deno.serve(async (req) => {
       }, 429);
     }
 
-    const esperado = await pinHash(usuario, pin, pepper);
-    const valido = safeEqual(esperado, cuenta.pin_hash);
+    const { data: valido, error: errorPin } = await db.rpc(
+  "boss_verificar_pin",
+  { p_usuario: usuario, p_pin: pin }
+);
+
+if (errorPin) {
+  return reply({ ok: false, mensaje: "Error de autenticación" }, 500);
+}
 
     if (!valido) {
       const intentos = (cuenta.intentos_fallidos ?? 0) + 1;
