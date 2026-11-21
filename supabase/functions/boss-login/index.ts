@@ -1,13 +1,13 @@
-Deno.serve((_req: Request) => {
-  return new Response(
-    JSON.stringify({
+
+Deno.serve(() => {
+  return Response.json(
+    {
       ok: false,
-      mensaje: "Autenticación en preparación"
-    }),
+      mensaje: "Inicio de sesión en configuración"
+    },
     {
       status: 503,
       headers: {
-        "Content-Type": "application/json",
         "Cache-Control": "no-store"
       }
     }
