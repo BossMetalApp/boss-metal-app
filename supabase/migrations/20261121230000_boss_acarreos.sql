@@ -1,4 +1,4 @@
-create table public.boss_acarreos (
+create table if not exists public.boss_acarreos (
   id text primary key check (char_length(id) between 1 and 100),
   registrado_por text not null,
   fecha date not null,
@@ -13,8 +13,8 @@ create table public.boss_acarreos (
   actualizado_en timestamptz not null default now()
 );
 
-create index boss_acarreos_usuario_fecha on public.boss_acarreos (registrado_por, fecha desc, id);
-create index boss_acarreos_fecha on public.boss_acarreos (fecha desc, id);
+create index if not exists boss_acarreos_usuario_fecha on public.boss_acarreos (registrado_por, fecha desc, id);
+create index if not exists boss_acarreos_fecha on public.boss_acarreos (fecha desc, id);
 
 alter table public.boss_acarreos enable row level security;
 revoke all on public.boss_acarreos from anon, authenticated;
