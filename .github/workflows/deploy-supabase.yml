@@ -21,4 +21,4 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           supabase functions deploy boss-login \
-            --project-ref syixumzybwcqumaszzqa
+            --project-ref syixumzybwcqumaszzqa --yes
