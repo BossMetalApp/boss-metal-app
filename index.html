@@ -184,7 +184,7 @@ function configureProductionHistory(session) {
   if (admin) parent.prepend(supervisorHistoryPanel);
   else parent.append(supervisorHistoryPanel);
   $('boss-history-heading').textContent = admin ? 'Historial compartido' : 'Mis registros';
-  $('boss-history-last-heading').textContent = admin ? 'Responsable y usuario' : 'Acción';
+  $('boss-history-last-heading').textContent = admin ? 'Responsable, usuario y acción' : 'Acción';
   supervisorHistoryPanel.hidden = false;
 }
 
@@ -208,17 +208,26 @@ async function loadSupervisorHistory(append = false) {
     for (const record of result.registros) {
       const row = historyRows.insertRow();
       for (const value of [record.fecha, record.turno, record.unidad, record.viajes]) row.insertCell().textContent = value;
+      const actionCell = row.insertCell();
       if (admin) {
-        row.insertCell().textContent = record.responsable && record.responsable !== record.registrado_por
+        const author = document.createElement('div');
+        author.textContent = record.responsable && record.responsable !== record.registrado_por
           ? record.responsable + ' · ' + record.registrado_por : record.registrado_por;
-        continue;
+        actionCell.append(author);
       }
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'secondary';
       button.textContent = 'Corregir';
       button.onclick = () => openSupervisorCorrection(record);
-      row.insertCell().append(button);
+      actionCell.append(button);
+      if (record.actualizado_por) {
+        const audit = document.createElement('div');
+        audit.className = 'muted';
+        audit.textContent = 'Corregido por ' + record.actualizado_por + ' · ' +
+          new Date(record.actualizado_en).toLocaleString('es-VE', {timeZone:'America/Caracas'});
+        actionCell.append(audit);
+      }
     }
     supervisorHistory.next = result.siguiente;
     historyMore.hidden = result.siguiente === null;
@@ -252,7 +261,7 @@ $('boss-edit-cancel').onclick = () => { correctionForm.hidden = true; };
 correctionForm.onsubmit = async (event) => {
   event.preventDefault();
   const session = bossSession, record = supervisorHistory.editing;
-  if (session?.rol !== 'supervisor' || !record || $('boss-edit-save').disabled) return;
+  if ((!isBossAdmin(session) && session?.rol !== 'supervisor') || !record || $('boss-edit-save').disabled) return;
   $('boss-edit-save').disabled = true;
   $('boss-edit-status').textContent = 'Guardando corrección…';
   try {
