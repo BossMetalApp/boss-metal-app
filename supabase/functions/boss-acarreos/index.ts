@@ -69,6 +69,19 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (typeof body?.accion === "string" && body.accion.startsWith("nomina_")) {
+      etapa = "nomina";
+      if (!validDate(body.fecha)) return reply({ok:false,mensaje:"Revisa la fecha"},400);
+      const {data,error} = await db.rpc("boss_nomina",{p_actor:account.usuario,p:body});
+      if (error) {
+        if (error.code === "42501") return reply({ok:false,mensaje:"Solo Administración puede consultar los montos y configurar personal"},403);
+        if (error.code === "23505") return reply({ok:false,mensaje:"El registro ya existe. Actualiza para consultarlo."},409);
+        if (error.code === "22023") return reply({ok:false,mensaje:error.message},400);
+        if (error.code.startsWith("22") || error.code.startsWith("23")) return reply({ok:false,mensaje:"Revisa los datos ingresados"},400);
+        throw error;
+      }
+      return reply({ok:true,...data});
+    }
     if (body?.accion === "avisos") {
       let query = db.from("boss_avisos").select("id,titulo,mensaje,creado_en").order("id",{ascending:false}).limit(30);
       if (Number.isSafeInteger(body.antes) && body.antes > 0) query = query.lt("id",body.antes);
