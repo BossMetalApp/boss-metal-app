@@ -22,7 +22,7 @@ jobs:
       - name: Instalar Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Aplicar y verificar esquema de supervisores
         env:
