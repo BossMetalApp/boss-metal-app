@@ -69,6 +69,32 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (body?.accion === "disponibilidad_listar" || body?.accion === "disponibilidad_guardar") {
+      etapa = "disponibilidad";
+      const table = "boss_disponibilidad_equipos";
+      const columns = "clave,nombre,estado,actualizado_por,actualizado_en";
+      if (body.accion === "disponibilidad_listar") {
+        const { data, error } = await db.from(table).select(columns).order("clave");
+        if (error) throw error;
+        return reply({ ok: true, equipos: data });
+      }
+
+      const clave = body.clave;
+      const nombre = typeof body.nombre === "string" ? body.nombre.trim() : "";
+      if (typeof clave !== "string" || !/^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo))$/.test(clave) ||
+          !nombre || nombre.length > 100 || !["Operativo", "Fuera de servicio"].includes(body.estado)) {
+        return reply({ ok: false, mensaje: "Revisa el equipo y su estado" }, 400);
+      }
+
+      const { data, error } = await db.from(table).upsert({
+        clave, nombre, estado: body.estado,
+        actualizado_por: account.usuario,
+        actualizado_en: new Date().toISOString(),
+      }, { onConflict: "clave" }).select(columns).single();
+      if (error) throw error;
+      return reply({ ok: true, equipo: data });
+    }
+
     if (["materiales_listar", "materiales_crear", "materiales_estado"].includes(body?.accion)) {
       etapa = "materiales";
       const table = "boss_solicitudes_materiales";
