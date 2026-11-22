@@ -43,11 +43,20 @@
     if(!people.length) list.textContent='Sin personal por turno registrado para esta fecha.';
     const lastPositions = new Map(['Mecánico','Ayudante de mecánico 1','Ayudante de mecánico 2','Chequeador','Vigilante 1','Vigilante 2'].map((name,index)=>[name,index]));
     const ordered = [...people].sort((a,b)=>(lastPositions.get(a.nombre) ?? -1)-(lastPositions.get(b.nombre) ?? -1));
-    for(const w of ordered){
+    if(people.length)list.append(text('p',people.filter(w=>w.registro).length+' de '+people.length+' puestos registrados'));
+    const labels={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia'};
+    for(const group of ['Choferes','Operadores','Mecánicos','Vigilancia']){
+      const members=ordered.filter(w=>(labels[w.cargo]||'Mecánicos')===group);
+      if(!members.length)continue;
+      const block=document.createElement('details');
+      block.append(text('summary',group+' · '+members.filter(w=>w.registro).length+' de '+members.length));
+      list.append(block);
+      for(const w of members){
       const button=text('button',w.nombre);button.type='button';
       button.append(text('span',w.cargo+' · '+(attendance(w.registro)||'Sin registrar')+(w.registro?' · '+w.registro.autor:'')));
       button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
-      button.onclick=()=>edit(w);list.append(button);
+      button.onclick=()=>edit(w);block.append(button);
+      }
     }
   }
   let payrollPeriod=null, reportVersion=0;
@@ -114,9 +123,9 @@
     root.append(banner);
     if(rows.some(r=>r.pending))root.append(text('p','Hay montos pendientes de definir.'));
 
-    const groups=new Map(['Choferes','Operadores','Personal de apoyo','Vigilancia','Supervisores','Costos fijos'].map(name=>[name,[]]));
+    const groups=new Map(['Choferes','Operadores','Mecánicos','Vigilancia','Supervisores','Costos fijos'].map(name=>[name,[]]));
     const groupNames={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia',Supervisor:'Supervisores','Costo fijo':'Costos fijos'};
-    for(const row of rows)groups.get(groupNames[row.w.cargo]||'Personal de apoyo').push(row);
+    for(const row of rows)groups.get(groupNames[row.w.cargo]||'Mecánicos').push(row);
     function heading(label,amount){
       const summary=document.createElement('summary');
       summary.append(text('span',label),text('b',amount));return summary;
