@@ -2,7 +2,8 @@
   const el = key => document.getElementById('nom-'+key);
   const money = value => new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).format(value);
   const text = (tag,value) => { const node=document.createElement(tag);node.textContent=value;return node; };
-  const detail = r => [r.fecha,r.turno,r.estado,r.equipo,r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
+  const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
+  const detail = r => [r.fecha,r.turno,attendance(r),r.equipo,r.condicion === attendance(r) ? null : r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
   let selected=null, report=null, equipment=[], version=0, saving=false;
   function closeEditor() { selected=null;el('form').hidden=true;el('form').reset(); }
   window.resetNomina=()=>{
@@ -12,7 +13,10 @@
     el('alta').reset();el('fijo').reset();el('fecha').value='';
   };
   function fields(){
-    const operator=selected?.cargo==='Operador' && el('asistencia').value==='Trabajó';
+    const standby=el('asistencia').value==='Stand by';
+    const operator=selected?.cargo==='Operador' && (standby || el('asistencia').value==='Trabajó');
+    if(standby) el('condicion').value='Stand by';
+    el('condicion').disabled=standby;
     const failure=operator && el('condicion').value==='Falla durante el turno';
     el('operador').hidden=!operator;el('decision-grupo').hidden=!failure;
     el('equipo').required=el('condicion').required=operator;
@@ -22,7 +26,10 @@
     closeEditor();selected=w;
     const r=w.registro;
     el('nombre').textContent=w.nombre+' · '+w.cargo;
-    el('asistencia').value=r?.estado||'';el('equipo').value=r?.equipo||'';
+    const options=el('asistencia');
+    options.querySelector('option[value="Stand by"]')?.remove();
+    if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
+    options.value=attendance(r)||'';el('equipo').value=r?.equipo||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
     el('nota').value=r?.nota||'';fields();el('form').hidden=false;el('asistencia').focus();
   }
@@ -31,7 +38,7 @@
     if(!people.length) list.textContent='Sin personal por turno registrado para esta fecha.';
     for(const w of people){
       const button=text('button',w.nombre);button.type='button';
-      button.append(text('span',w.cargo+' · '+(w.registro?.estado||'Sin registrar')+(w.registro?' · '+w.registro.autor:'')));
+      button.append(text('span',w.cargo+' · '+(attendance(w.registro)||'Sin registrar')+(w.registro?' · '+w.registro.autor:'')));
       button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
       button.onclick=()=>edit(w);list.append(button);
     }
@@ -100,7 +107,7 @@
     finally{btn.disabled=false;saving=false;}
   }
   el('form').onsubmit=e=>save(e,{accion:'nomina_guardar',fecha:el('fecha').value,turno:el('turno').value,persona:selected.id,
-    revision:selected.registro?.revision||0,estado:el('asistencia').value,equipo:el('equipo').value,
+    revision:selected.registro?.revision||0,estado:el('asistencia').value==='Stand by'?'Trabajó':el('asistencia').value,equipo:el('equipo').value,
     condicion:el('condicion').value,decision:el('decision').value,nota:el('nota').value});
   el('alta').onsubmit=e=>save(e,{accion:'nomina_alta',fecha:el('ingreso').value,nombre:el('persona').value.trim(),cargo:el('cargo').value});
   el('fijo').onsubmit=e=>save(e,{accion:'nomina_sueldo',fecha:el('fecha').value,persona:el('supervisor').value,monto:el('monto').value});
@@ -109,7 +116,14 @@
     el('condicion').value=known?.estado==='Operativo'?'Operativa':known?.estado==='Fuera de servicio'?'Fuera de servicio':'';
     fields();
   };
-  el('asistencia').onchange=el('condicion').onchange=fields;
+  el('asistencia').onchange=()=>{
+    if(el('asistencia').value==='Trabajó' && el('condicion').value==='Stand by') el('condicion').value='';
+    fields();
+  };
+  el('condicion').onchange=()=>{
+    if(el('condicion').value==='Stand by') el('asistencia').value='Stand by';
+    fields();
+  };
   el('fecha').onchange=el('turno').onchange=el('actualizar').onclick=()=>load();
   el('cancelar').onclick=closeEditor;
   el('excel').onclick=()=>{
@@ -120,7 +134,7 @@
     for(const r of summaryRows(report)){
       cents+=Math.round(Number(r.pay)*100);
       summary.push([report.desde,report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending]);
-      for(const a of r.rows)entries.push([a.fecha,a.turno,r.w.nombre,r.w.cargo,a.estado,a.equipo||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
+      for(const a of r.rows)entries.push([a.fecha,a.turno,r.w.nombre,r.w.cargo,attendance(a),a.equipo||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
     }
     summary.push(['','','Total calculado','','','','','',cents/100,'']);
     download(xlsx([{name:'Resumen quincenal',rows:summary},{name:'Asistencia',rows:entries}]),'BossMetal_Nomina_'+report.desde+'_'+report.hasta+'.xlsx');
