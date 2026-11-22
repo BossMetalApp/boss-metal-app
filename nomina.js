@@ -113,6 +113,7 @@
         pending:fixed && w.sueldo==null?'Sueldo pendiente de configurar':rows.some(r=>r.monto==null)?'Permiso pendiente de valoración':''};
     });
   }
+  window.filasNominaParaGastos=(data,dia)=>summaryRows(data,dia);
   function renderReport(data){
     report=data;const root=el('resumen');root.replaceChildren();
     const rows=summaryRows(data), total=rows.reduce((sum,r)=>sum+Math.round(Number(r.pay)*100),0)/100;

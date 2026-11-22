@@ -1,0 +1,29 @@
+name: Activar gastos
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/20261122230000_gastos.sql']
+  workflow_dispatch:
+concurrency:
+  group: boss-metal-supabase
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: syixumzybwcqumaszzqa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.2.0
+      - name: Aplicar tabla de gastos y publicar servicio
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -Rs '{query: .}' supabase/migrations/20261122230000_gastos.sql |
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+              --data-binary @- "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query"
+          supabase functions deploy boss-acarreos --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF" --yes

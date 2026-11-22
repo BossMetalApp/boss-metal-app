@@ -69,6 +69,34 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (body?.accion === "gastos_guardar" || body?.accion === "gastos_listar") {
+      if (!admin) return reply({ok:false,mensaje:"Solo Administración puede acceder a gastos."},403);
+      etapa = "gastos";
+      if (body.accion === "gastos_guardar") {
+        const {id,fecha,concepto,partida,destino,monto} = body;
+        if (typeof id !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id) ||
+          !validDate(fecha) || !["Repuestos","Aceites","Mangueras","Filtros","Oficina","Comida","Operacionales"].includes(partida) ||
+          typeof concepto !== "string" || !concepto.trim() || concepto.length>200 ||
+          typeof destino !== "string" || !destino.trim() || destino.length>160 ||
+          typeof monto !== "number" || !(monto>0 && monto<1e12) || Number(monto.toFixed(2))!==monto)
+          return reply({ok:false,mensaje:"Revisa los datos del gasto."},400);
+        const row={id,fecha,concepto:concepto.trim(),partida,destino:destino.trim(),monto,registrado_por:account.usuario};
+        const {error}=await db.from("boss_gastos").insert(row);
+        if(error?.code==="23505"){
+          const {data,error:readError}=await db.from("boss_gastos").select("*").eq("id",id).single();
+          if(readError) throw readError;
+          if(Object.entries(row).some(([k,v])=>data[k]!==v))return reply({ok:false,mensaje:"Este gasto ya se guardó con otros datos."},409);
+        }else if(error)throw error;
+        return reply({ok:true});
+      }
+      const {desde,hasta,offset=0}=body;
+      if(!validDate(desde)||!validDate(hasta)||hasta<desde||hasta.slice(0,7)!==desde.slice(0,7)||!Number.isSafeInteger(offset)||offset<0)
+        return reply({ok:false,mensaje:"Revisa el período."},400);
+      const {data,error}=await db.from("boss_gastos").select("fecha,concepto,monto,partida,destino").gte("fecha",desde).lte("fecha",hasta)
+        .order("creado_en").order("id").range(offset,offset+499);
+      if(error)throw error;
+      return reply({ok:true,gastos:data});
+    }
     if (typeof body?.accion === "string" && body.accion.startsWith("nomina_")) {
       etapa = "nomina";
       if (!validDate(body.fecha)) return reply({ok:false,mensaje:"Revisa la fecha"},400);
