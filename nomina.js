@@ -29,7 +29,7 @@
     const fixed=!!assigned && (!r?.equipo || r.equipo===assigned.nombre);
     el('equipo').hidden=fixed;
     document.querySelector('label[for="nom-equipo"]').hidden=fixed;
-    el('nombre').textContent=w.nombre+' · '+w.cargo;
+    el('nombre').textContent=w.nombre+' · '+w.cargo+(w.cargo==='Vigilante'?' · Registra ambos turnos de la guardia de 24 h.':'');
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
@@ -61,7 +61,7 @@
       const fixed=w.cargo==='Supervisor' || w.cargo==='Costo fijo' || (w.cargo==='Vigilante' && w.sueldo!=null);
       return {w,rows,fixed,day:worked.filter(r=>r.turno==='Diurno').length,night:worked.filter(r=>r.turno==='Nocturno').length,
         absent:rows.filter(r=>r.estado==='Faltó').length,permits:rows.filter(r=>r.estado==='Permiso').length,
-        pay:fixed?w.sueldo:rows.reduce((sum,r)=>sum+(Number(r.monto)||0),0),
+        pay:fixed && w.sueldo!=null?Math.max(0,w.sueldo-(w.descuento_guardias||0)):fixed?null:rows.reduce((sum,r)=>sum+(Number(r.monto)||0),0),
         pending:fixed && w.sueldo==null?'Sueldo pendiente de configurar':rows.some(r=>r.monto==null)?'Permiso pendiente de valoración':''};
     });
   }
@@ -75,6 +75,7 @@
       const block=document.createElement('details');
       block.append(text('summary',r.w.nombre+' · '+(r.pay==null?r.pending:money(r.pay))));
       block.append(text('p',r.w.cargo+(r.fixed?' · Fijo quincenal':' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
+      if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.w.sueldo)+' · Descuento por guardias '+money(r.w.descuento_guardias||0)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
       for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
       root.append(block);
@@ -135,12 +136,12 @@
   el('cancelar').onclick=closeEditor;
   el('excel').onclick=()=>{
     if(!report || !isBossAdmin(bossSession))return;
-    const summary=[['Desde','Hasta','Trabajador','Cargo','Diurnos','Nocturnos','Faltas','Permisos','USD calculados','Pendiente']];
+    const summary=[['Desde','Hasta','Trabajador','Cargo','Diurnos','Nocturnos','Faltas','Permisos','USD calculados','Pendiente','Descuento guardias USD']];
     const entries=[['Fecha','Turno','Trabajador','Cargo','Asistencia','Máquina','Condición','Turno reconocido','USD','Observación','Registró','Última edición']];
     let cents=0;
     for(const r of summaryRows(report)){
       cents+=Math.round(Number(r.pay)*100);
-      summary.push([report.desde,report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending]);
+      summary.push([report.desde,report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending,r.w.descuento_guardias||0]);
       for(const a of r.rows)entries.push([a.fecha,a.turno,r.w.nombre,r.w.cargo,attendance(a),a.equipo||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
     }
     summary.push(['','','Total calculado','','','','','',cents/100,'']);
