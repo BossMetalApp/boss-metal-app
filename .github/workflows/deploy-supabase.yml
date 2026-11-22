@@ -2,6 +2,9 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches: [disponibilidad-equipos]
+    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
@@ -36,9 +39,25 @@ jobs:
             cat supabase/migrations/20261121233000_boss_categorias_materiales.sql
             cat supabase/migrations/20261121233500_boss_responsable_acarreo.sql
             cat supabase/migrations/20261122101500_boss_destinos_materiales.sql
+            cat supabase/migrations/20261122102000_boss_disponibilidad_equipos.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
+          do $$
+          begin
+            insert into public.boss_disponibilidad_equipos (clave, nombre, estado, actualizado_por)
+            values ('equipo:d8r', 'Bulldozer D8R', 'Operativo', 'PruebaDeploy')
+            on conflict (clave) do update set estado = excluded.estado, actualizado_por = excluded.actualizado_por;
+            update public.boss_disponibilidad_equipos set estado = 'Fuera de servicio' where clave = 'equipo:d8r';
+            if not exists (select 1 from public.boss_disponibilidad_equipos
+                           where clave = 'equipo:d8r' and estado = 'Fuera de servicio') then
+              raise exception 'No se pudo comprobar el cambio de disponibilidad';
+            end if;
+            raise exception using errcode = 'BM001', message = 'Revertir la comprobación de disponibilidad';
+          exception when sqlstate 'BM001' then
+            null;
+          end;
+          $$;
           do $$
           declare
             prueba text := 'PruebaAdmin-' || gen_random_uuid();
