@@ -172,7 +172,7 @@ body.boss-authenticated #boss-login-screen{display:none}
 <div id="nom-decision-grupo" hidden><label for="nom-decision">Turno reconocido</label><select id="nom-decision"><option value="">Seleccionar</option><option>Completo</option><option>Medio</option></select></div></div>
 <label for="nom-nota">Observación</label><input id="nom-nota" maxlength="300">
 <div class="actions"><button>Guardar asistencia</button><button type="button" class="secondary" id="nom-cancelar">Cerrar</button></div></form></div>
-<div id="nom-admin" hidden><div class="card"><h3>Resumen quincenal</h3><div id="nom-resumen"></div><button type="button" id="nom-excel">Descargar Excel</button></div>
+<div id="nom-admin" hidden><div class="card"><h3>Resumen de nómina</h3><label for="nom-periodo">Período del resumen</label><select id="nom-periodo"><option value="dia">Día</option><option value="quincena" selected>Quincena</option></select><div id="nom-resumen"></div><button type="button" id="nom-excel">Descargar Excel</button></div>
 <div class="card"><details><summary><strong>Registrar trabajador</strong></summary><form id="nom-alta">
 <label for="nom-persona">Nombre y apellido</label><input id="nom-persona" maxlength="100" required>
 <label for="nom-cargo">Cargo</label><select id="nom-cargo"><option>Chofer</option><option>Operador</option><option>Mecánico</option><option>Ayudante de mecánico</option><option>Chequeador</option><option>Vigilante</option><option>Supervisor</option></select>
@@ -1235,4 +1235,4 @@ graphPeriod.onchange = () => {
   loadProductionCharts();
 };
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=resumen6"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=diario7"></script><script src="./avisos.js?v=1"></script></body></html>

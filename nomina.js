@@ -50,18 +50,39 @@
       button.onclick=()=>edit(w);list.append(button);
     }
   }
-  function summaryRows(data){
+  function selectedDay(){return el('periodo').value==='dia'?el('fecha').value:null;}
+  function dayNumber(date){return Date.parse(date+'T00:00:00Z')/86400000;}
+  function summaryRows(data,date=selectedDay()){
     const byPerson=new Map();
     for(const row of data.registros){
       if(!byPerson.has(row.persona)) byPerson.set(row.persona,[]);
       byPerson.get(row.persona).push(row);
     }
     return data.personal.map(w=>{
-      const rows=byPerson.get(w.id)||[], worked=rows.filter(r=>r.estado==='Trabajó');
+      const all=byPerson.get(w.id)||[];
+      const rows=date?all.filter(r=>r.fecha===date):all, worked=rows.filter(r=>r.estado==='Trabajó');
       const fixed=w.cargo==='Supervisor' || w.cargo==='Costo fijo' || (w.cargo==='Vigilante' && w.sueldo!=null);
-      return {w,rows,fixed,day:worked.filter(r=>r.turno==='Diurno').length,night:worked.filter(r=>r.turno==='Nocturno').length,
+      let base=w.sueldo, deduction=w.descuento_guardias||0;
+      if(date && fixed && base!=null){
+        const start=w.desde && w.desde>data.desde?w.desde:data.desde;
+        const days=dayNumber(data.hasta)-dayNumber(start)+1;
+        const offset=dayNumber(date)-dayNumber(start);
+        const cents=Math.round(base*100);
+        base=offset<0?0:(Math.round(cents*(offset+1)/days)-Math.round(cents*offset/days))/100;
+        const missed=new Map();
+        if(deduction)for(const r of all){
+          if(r.estado!=='Faltó')continue;
+          if(!missed.has(r.fecha))missed.set(r.fecha,new Set());
+          missed.get(r.fecha).add(r.turno);
+        }
+        const dates=[...missed].filter(([,shifts])=>shifts.size===2).map(([d])=>d).sort();
+        const index=dates.indexOf(date);
+        const perGuard=dates.length?deduction/dates.length:0;
+        deduction=index<0?0:Math.min(perGuard,Math.max(0,w.sueldo-index*perGuard));
+      }
+      return {w,rows,fixed,base,deduction,day:worked.filter(r=>r.turno==='Diurno').length,night:worked.filter(r=>r.turno==='Nocturno').length,
         absent:rows.filter(r=>r.estado==='Faltó').length,permits:rows.filter(r=>r.estado==='Permiso').length,
-        pay:fixed && w.sueldo!=null?Math.max(0,w.sueldo-(w.descuento_guardias||0)):fixed?null:rows.reduce((sum,r)=>sum+(Number(r.monto)||0),0),
+        pay:fixed && w.sueldo!=null?(date?base-deduction:Math.max(0,base-deduction)):fixed?null:rows.reduce((sum,r)=>sum+(Number(r.monto)||0),0),
         pending:fixed && w.sueldo==null?'Sueldo pendiente de configurar':rows.some(r=>r.monto==null)?'Permiso pendiente de valoración':''};
     });
   }
@@ -71,7 +92,7 @@
     const banner=document.createElement('div');
     banner.className='nom-total';
     const fecha=v=>v.split('-').reverse().join('/');
-    banner.append(text('span',fecha(data.desde)+' al '+fecha(data.hasta)),text('small','Total calculado'),text('strong',money(total)));
+    banner.append(text('span',selectedDay()?fecha(selectedDay()):fecha(data.desde)+' al '+fecha(data.hasta)),text('small','Total calculado'),text('strong',money(total)));
     root.append(banner);
     if(rows.some(r=>r.pending))root.append(text('p','Hay montos pendientes de definir.'));
     const select=el('supervisor');select.replaceChildren(new Option('Seleccionar',''));
@@ -91,8 +112,8 @@
       for(const r of members){
       const block=document.createElement('details');
       block.append(heading(r.w.nombre,r.pay==null?r.pending:money(r.pay)));
-      block.append(text('p',r.w.cargo+(r.fixed?' · Fijo quincenal':' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
-      if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.w.sueldo)+' · Descuento por guardias '+money(r.w.descuento_guardias||0)));
+      block.append(text('p',r.w.cargo+(r.fixed?(selectedDay()?' · Fijo prorrateado':' · Fijo quincenal'):' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
+      if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.base)+' · Descuento por guardias '+money(r.deduction)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
       for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
       group.append(block);
@@ -152,6 +173,7 @@
   };
   el('fecha').onchange=el('turno').onchange=el('actualizar').onclick=()=>load();
   el('cancelar').onclick=closeEditor;
+  el('periodo').onchange=()=>{if(report)renderReport(report);};
   el('excel').onclick=()=>{
     if(!report || !isBossAdmin(bossSession))return;
     const summary=[['Desde','Hasta','Trabajador','Cargo','Diurnos','Nocturnos','Faltas','Permisos','USD calculados','Pendiente','Descuento guardias USD']];
@@ -159,11 +181,11 @@
     let cents=0;
     for(const r of summaryRows(report)){
       cents+=Math.round(Number(r.pay)*100);
-      summary.push([report.desde,report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending,r.w.descuento_guardias||0]);
+      summary.push([selectedDay()||report.desde,selectedDay()||report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending,r.deduction]);
       for(const a of r.rows)entries.push([a.fecha,a.turno,r.w.nombre,r.w.cargo,attendance(a),a.equipo||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
     }
     summary.push(['','','Total calculado','','','','','',cents/100,'']);
-    download(xlsx([{name:'Resumen quincenal',rows:summary},{name:'Asistencia',rows:entries}]),'BossMetal_Nomina_'+report.desde+'_'+report.hasta+'.xlsx');
+    download(xlsx([{name:selectedDay()?'Resumen diario':'Resumen quincenal',rows:summary},{name:'Asistencia',rows:entries}]),'BossMetal_Nomina_'+(selectedDay()||report.desde+'_'+report.hasta)+'.xlsx');
   };
   window.abrirNomina=()=>{
     if(!el('fecha').value){const current=operationalShift();el('fecha').value=el('ingreso').value=current.date;el('turno').value=current.shift;}
