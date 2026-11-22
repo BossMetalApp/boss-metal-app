@@ -69,6 +69,67 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (["materiales_listar", "materiales_crear", "materiales_estado"].includes(body?.accion)) {
+      etapa = "materiales";
+      const table = "boss_solicitudes_materiales";
+      const columns = "id,solicitado_por,categoria,descripcion,cantidad,unidad,estado,creado_en,actualizado_en";
+
+      if (body.accion === "materiales_listar") {
+        const offset = body.offset ?? 0;
+        if (!Number.isSafeInteger(offset) || offset < 0) {
+          return reply({ ok: false, mensaje: "Página inválida" }, 400);
+        }
+        let query = db.from(table).select(columns);
+        if (!admin) query = query.eq("solicitado_por", account.usuario);
+        const { data, error } = await query.order("creado_en", { ascending: false }).order("id").range(offset, offset + 49);
+        if (error) throw error;
+        return reply({ ok: true, solicitudes: data, siguiente: data.length === 50 ? offset + 50 : null });
+      }
+
+      if (typeof body.id !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(body.id)) {
+        return reply({ ok: false, mensaje: "Solicitud inválida" }, 400);
+      }
+
+      if (body.accion === "materiales_estado") {
+        if (!admin) return reply({ ok: false, mensaje: "Solo administradores" }, 403);
+        if (!["Pendiente", "Aprobada", "Entregada", "Rechazada"].includes(body.estado) ||
+            typeof body.actualizado_en !== "string" || !Number.isFinite(Date.parse(body.actualizado_en))) {
+          return reply({ ok: false, mensaje: "Estado inválido" }, 400);
+        }
+        const { data, error } = await db.from(table)
+          .update({ estado: body.estado, actualizado_en: new Date().toISOString() })
+          .eq("id", body.id).eq("actualizado_en", body.actualizado_en)
+          .select("id").maybeSingle();
+        if (error) throw error;
+        if (!data) return reply({ ok: false, mensaje: "La solicitud cambió. Actualiza la lista antes de editarla." }, 409);
+        return reply({ ok: true });
+      }
+
+      if (admin) return reply({ ok: false, mensaje: "Usa una cuenta de supervisor para solicitar materiales" }, 403);
+      const descripcion = typeof body.descripcion === "string" ? body.descripcion.trim() : "";
+      const unidad = body.unidad ?? null;
+      const cantidad = body.cantidad;
+      if (!["Aceites", "Mangueras", "EPP"].includes(body.categoria) ||
+          !descripcion || descripcion.length > 300 ||
+          typeof cantidad !== "number" || !Number.isFinite(cantidad) || cantidad < 0.01 ||
+          cantidad > 100000 || Number(cantidad.toFixed(2)) !== cantidad ||
+          (unidad !== null && (typeof unidad !== "string" || !/^[A-Za-z0-9-]{1,12}$/.test(unidad)))) {
+        return reply({ ok: false, mensaje: "Revisa la categoría, el material, la cantidad y la unidad" }, 400);
+      }
+      const { error } = await db.from(table).upsert({
+        id: body.id, solicitado_por: account.usuario, categoria: body.categoria,
+        descripcion, cantidad, unidad,
+      }, { onConflict: "id", ignoreDuplicates: true });
+      if (error) throw error;
+      const { data, error: readError } = await db.from(table).select("id")
+        .eq("id", body.id).eq("solicitado_por", account.usuario).eq("categoria", body.categoria)
+        .eq("descripcion", descripcion).eq("cantidad", cantidad)
+        .filter("unidad", unidad === null ? "is" : "eq", unidad).maybeSingle();
+      if (readError) throw readError;
+      if (!data) return reply({ ok: false, mensaje: "No se pudo confirmar esta solicitud" }, 409);
+      return reply({ ok: true }, 201);
+    }
+
     if (body?.accion === "listar_supervisores" || body?.accion === "crear_supervisor" || body?.accion === "estado_supervisor") {
       if (!admin) return reply({ ok: false, mensaje: "Solo administradores" }, 403);
       if (body.accion === "listar_supervisores") {
