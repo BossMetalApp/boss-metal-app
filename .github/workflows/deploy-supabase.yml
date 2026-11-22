@@ -2,6 +2,9 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches: [registro-admin-supabase]
+    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
@@ -34,9 +37,25 @@ jobs:
             cat supabase/migrations/20261121231500_boss_resumen_operacion.sql
             cat supabase/migrations/20261121232500_boss_solicitudes_materiales.sql
             cat supabase/migrations/20261121233000_boss_categorias_materiales.sql
+            cat supabase/migrations/20261121233500_boss_responsable_acarreo.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
+          do $$
+          declare
+            prueba text := 'PruebaAdmin-' || gen_random_uuid();
+          begin
+            insert into public.boss_acarreos
+              (id, registrado_por, fecha, turno, unidad, viajes, capacidad_m3, densidad, equipo, responsable)
+            values (prueba, 'Admin', date '1900-01-01', 'Diurno', '43', 1, 20, 0.83, 'Prueba', 'Responsable de prueba');
+            if not exists (select 1 from public.boss_acarreos where id = prueba and responsable = 'Responsable de prueba') then
+              raise exception 'No se pudo comprobar el registro de Admin';
+            end if;
+            raise exception using errcode = 'BM001', message = 'Retirar el registro temporal';
+          exception when sqlstate 'BM001' then
+            null;
+          end;
+          $$;
           do $$
           declare
             prueba uuid := gen_random_uuid();
