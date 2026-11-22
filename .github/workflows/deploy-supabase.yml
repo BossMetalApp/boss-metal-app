@@ -1,27 +1,229 @@
-name: Ajustar puestos operativos
+name: Deploy Supabase Functions
+
 on:
-  push:
-    branches: [rotacion-vigilantes-ayudantes]
-    paths: ['.github/workflows/deploy-supabase.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: boss-metal-supabase
+  cancel-in-progress: false
+
 jobs:
-  ajustar:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: syixumzybwcqumaszzqa
     steps:
-      - name: Actualizar y comprobar puestos
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 3.2.0
+
+      - name: Aplicar y verificar esquema de supervisores
         env:
-          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          cat > consulta.sql <<'SQL'
+          {
+            printf 'begin;\n'
+            cat supabase/migrations/20261121230000_boss_acarreos.sql
+            cat supabase/migrations/20261121230500_boss_crear_supervisor.sql
+            cat supabase/migrations/20261121231000_boss_lectura_sesiones.sql
+            cat supabase/migrations/20261121231500_boss_resumen_operacion.sql
+            cat supabase/migrations/20261121232500_boss_solicitudes_materiales.sql
+            cat supabase/migrations/20261121233000_boss_categorias_materiales.sql
+            cat supabase/migrations/20261121233500_boss_responsable_acarreo.sql
+            cat supabase/migrations/20261122101500_boss_destinos_materiales.sql
+            cat supabase/migrations/20261122102000_boss_disponibilidad_equipos.sql
+            cat supabase/migrations/20261122102500_boss_registro_unico_turno.sql
+            cat supabase/migrations/20261122103000_boss_registro_cero_viajes.sql
+            cat supabase/migrations/20261122103500_boss_graficas_produccion.sql
+            cat supabase/migrations/20261122120000_boss_avisos.sql
+            cat supabase/migrations/20261122140000_boss_nomina.sql
+            cat supabase/migrations/20261122150000_boss_aviso_nomina.sql
+            cat <<'SQL'
           do $$
-          declare par record;
+          declare
+            actor text := 'NomPrueba_'||substr(md5(random()::text),1,9);
+            id_persona uuid; params jsonb; resultado jsonb; fila jsonb; r record;
           begin
-           for par in select * from (values ('Vigilante Diurno','Vigilante 1','Vigilante'),('Vigilante Nocturno','Vigilante 2','Vigilante'),('Ayudante de mecánico','Ayudante de mecánico 1','Ayudante de mecánico')) v(anterior,nuevo,cargo) loop
-           update public.boss_nomina_personal p set nombre=par.nuevo where p.cargo=par.cargo and p.nombre=par.anterior;
-           if (select count(*) from public.boss_nomina_personal p where p.cargo=par.cargo and p.nombre=par.nuevo)<>1 then raise exception 'Revisar puesto'; end if;
-           end loop;
-           insert into public.boss_nomina_personal(nombre,cargo,desde) select 'Ayudante de mecánico 2',cargo,desde from public.boss_nomina_personal where nombre='Ayudante de mecánico 1' and cargo='Ayudante de mecánico' on conflict do nothing;
-           if not exists(select 1 from public.boss_nomina_personal where nombre='Ayudante de mecánico 2' and cargo='Ayudante de mecánico' and desde=date '2026-11-16') then raise exception 'Verificar alta'; end if;
+            perform public.boss_crear_supervisor(actor,'6815');
+            for r in select * from (values ('Chofer',35),('Operador',40),('Mecánico',35),('Ayudante de mecánico',30),('Chequeador',20),('Vigilante',18)) t(cargo,monto) loop
+              insert into public.boss_nomina_personal(nombre,cargo,desde) values(actor,r.cargo,'1899-11-01') returning id into id_persona;
+              params:=jsonb_build_object('accion','nomina_guardar','fecha','1899-11-15','turno','Nocturno','persona',id_persona,'estado','Trabajó','equipo','Jumbo','condicion','Operativa');
+              perform public.boss_nomina(actor,params);
+              if (select monto from public.boss_nomina_asistencia where persona=id_persona) is distinct from r.monto then raise exception 'Tarifa incorrecta'; end if;
+              begin
+                perform public.boss_nomina(actor,params);
+                raise exception 'Duplicado aceptado';
+              exception when unique_violation then null; end;
+              if r.cargo='Operador' then
+                perform public.boss_nomina(actor,params||'{"revision":1,"condicion":"Stand by"}');
+                if (select monto from public.boss_nomina_asistencia where persona=id_persona)<>20 then raise exception 'Medio turno incorrecto'; end if;
+                perform public.boss_nomina(actor,params||'{"revision":2,"condicion":"Falla durante el turno","decision":"Completo","nota":"Operó cinco horas"}');
+                if (select monto from public.boss_nomina_asistencia where persona=id_persona)<>40 then raise exception 'Decisión incorrecta'; end if;
+              end if;
+            end loop;
+            resultado:=public.boss_nomina(actor,'{"accion":"nomina_dia","fecha":"1899-11-15","turno":"Nocturno"}');
+            for fila in select value from jsonb_array_elements(resultado->'personal') loop
+              if (fila->'registro') ? 'monto' then raise exception 'Importe en asistencia'; end if;
+            end loop;
+            begin
+              perform public.boss_nomina(actor,'{"accion":"nomina_resumen","fecha":"1899-11-15"}');
+              raise exception 'Resumen accesible a supervisores';
+            exception when insufficient_privilege then null; end;
+            insert into public.boss_nomina_personal(nombre,cargo,desde) values(actor,'Supervisor','1899-11-01') returning id into id_persona;
+            perform public.boss_nomina('Admin',jsonb_build_object('accion','nomina_sueldo','fecha','1899-11-16','persona',id_persona,'monto',120));
+            resultado:=public.boss_nomina('Admin','{"accion":"nomina_resumen","fecha":"1899-11-30"}');
+            if resultado->>'desde'<>'1899-11-16' or resultado->>'hasta'<>'1899-11-30' or not exists(select 1 from jsonb_array_elements(resultado->'personal') w where w->>'id'=id_persona::text and w->>'sueldo'='120.00') then raise exception 'Resumen quincenal incorrecto'; end if;
+            raise exception using errcode='BM001',message='Retirar datos de prueba de nómina';
+          exception when sqlstate 'BM001' then null;
           end $$;
+          do $$
+          declare titulo_turno text := 'turno:1899-12-28:Nocturno';
+          begin
+            insert into public.boss_acarreos(id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo)
+            select gen_random_uuid()::text,'PruebaDeploy','1899-12-28','Nocturno',u,v,20,0.83,'Prueba'
+            from (values ('43',1),('44',2),('45',0)) t(u,v);
+            perform public.boss_revisar_turnos();
+            if exists(select 1 from public.boss_avisos where clave=titulo_turno) then raise exception 'Aviso prematuro'; end if;
+            insert into public.boss_acarreos(id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo)
+            values(gen_random_uuid()::text,'PruebaDeploy','1899-12-28','Nocturno','46',0,20,0.83,'Prueba');
+            perform public.boss_revisar_turnos();
+            insert into public.boss_turnos_por_revisar values ('1899-12-28','Nocturno');
+            perform public.boss_revisar_turnos();
+            if (select count(*) from public.boss_avisos where clave=titulo_turno and mensaje like '%3 viajes · 49,80 toneladas') <> 1 then raise exception 'Total o cantidad de avisos incorrectos'; end if;
+            raise exception using errcode='BM001',message='Retirar prueba de avisos';
+          exception when sqlstate 'BM001' then null;
+          end $$;
+          select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
+          set local role service_role;
+          select jsonb_typeof(public.boss_graficas_produccion(current_date - 14, current_date)) as tipo_graficas;
+          do $$
+          begin
+            insert into public.boss_disponibilidad_equipos (clave, nombre, estado, actualizado_por)
+            values ('equipo:d8r', 'Bulldozer D8R', 'Operativo', 'PruebaDeploy')
+            on conflict (clave) do update set estado = excluded.estado, actualizado_por = excluded.actualizado_por;
+            update public.boss_disponibilidad_equipos set estado = 'Fuera de servicio' where clave = 'equipo:d8r';
+            if not exists (select 1 from public.boss_disponibilidad_equipos
+                           where clave = 'equipo:d8r' and estado = 'Fuera de servicio') then
+              raise exception 'No se pudo comprobar el cambio de disponibilidad';
+            end if;
+            raise exception using errcode = 'BM001', message = 'Revertir la comprobación de disponibilidad';
+          exception when sqlstate 'BM001' then
+            null;
+          end;
+          $$;
+          do $$
+          declare
+            prueba text := 'PruebaAdmin-' || gen_random_uuid();
+          begin
+            insert into public.boss_acarreos
+              (id, registrado_por, fecha, turno, unidad, viajes, capacidad_m3, densidad, equipo, responsable)
+            values (prueba, 'Admin', date '1900-01-01', 'Diurno', '43', 1, 20, 0.83, 'Prueba', 'Responsable de prueba');
+            if not exists (select 1 from public.boss_acarreos where id = prueba and responsable = 'Responsable de prueba') then
+              raise exception 'No se pudo comprobar el registro de Admin';
+            end if;
+            begin
+              insert into public.boss_acarreos
+                (id, registrado_por, fecha, turno, unidad, viajes, capacidad_m3, densidad, equipo)
+              values (prueba || '-duplicado', 'SupervisorPrueba', date '1900-01-01', 'Diurno', '43', 1, 20, 0.83, 'Prueba');
+              raise exception 'La base aceptó un total repetido';
+            exception when unique_violation then
+              null;
+            end;
+            update public.boss_acarreos
+            set viajes = 2, actualizado_por = 'Admin2', actualizado_en = now() where id = prueba;
+            if not exists (
+              select 1 from public.boss_acarreos_correcciones
+              where acarreo_id = prueba and corregido_por = 'Admin2'
+                and antes->>'viajes' = '1' and despues->>'viajes' = '2'
+            ) then
+              raise exception 'La corrección no quedó registrada';
+            end if;
+            update public.boss_acarreos set viajes = 0, actualizado_por = 'Admin2', actualizado_en = now() where id = prueba;
+            if not exists (select 1 from public.boss_acarreos where id = prueba and viajes = 0) then
+              raise exception 'No quedó registrado el cero confirmado';
+            end if;
+            raise exception using errcode = 'BM001', message = 'Retirar el registro temporal';
+          exception when sqlstate 'BM001' then
+            null;
+          end;
+          $$;
+          do $$
+          declare
+            prueba uuid := gen_random_uuid();
+          begin
+            insert into public.boss_solicitudes_materiales
+              (id, solicitado_por, categoria, descripcion, cantidad)
+            values (prueba, 'PruebaDeploy', 'EPP', 'Verificación temporal', 1);
+            insert into public.boss_solicitudes_materiales
+              (id, solicitado_por, categoria, descripcion, cantidad)
+            select gen_random_uuid(), 'PruebaDeploy', categoria, 'Verificación temporal', 1
+            from (values ('Filtros'), ('Repuestos'), ('Otros')) as nuevas(categoria);
+            insert into public.boss_solicitudes_materiales
+              (id, solicitado_por, categoria, descripcion, cantidad, equipo_adicional, vehiculo)
+            select gen_random_uuid(), 'PruebaDeploy', 'Filtros', 'Verificación temporal', 1, equipo, vehiculo
+            from (values ('Bulldozer D8R', null), ('Payloader HL770', null),
+                         ('Jumbo', null), ('Vehículo', 'Camioneta de prueba')) destinos(equipo, vehiculo);
+            update public.boss_solicitudes_materiales set estado = 'Aprobada' where id = prueba;
+            if not exists (select 1 from public.boss_solicitudes_materiales where id = prueba and estado = 'Aprobada') then
+              raise exception 'No se pudo comprobar el flujo de solicitudes';
+            end if;
+            raise exception using errcode = 'BM001', message = 'Retirar la solicitud temporal';
+          exception when sqlstate 'BM001' then
+            null;
+          end;
+          $$;
+          select public.boss_resumen_operacion(current_date, current_date) ? 'viajes' as resumen_disponible;
+          select usuario_id from public.boss_sesiones where token_hash = repeat('0', 64) and expira_en > now();
+          select public.boss_crear_supervisor(current_setting('boss.deploy_test_user'), '7419');
+          reset role;
+          do $$
+          declare
+            nombre text := current_setting('boss.deploy_test_user');
+          begin
+            if public.boss_verificar_pin(nombre, '7419') is distinct from true then
+              raise exception 'El verificador no admite la cuenta de supervisor';
+            end if;
+            delete from public.boss_usuarios where usuario = nombre;
+          end;
+          $$;
+          notify pgrst, 'reload schema';
+          commit;
           SQL
-          jq -Rs '{query:.}' consulta.sql | curl -fsS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @- https://api.supabase.com/v1/projects/syixumzybwcqumaszzqa/database/query
+          } | jq -Rs '{query: .}' | curl --fail-with-body --silent --show-error \
+            --request POST --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header 'Content-Type: application/json' --data-binary @- \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query"
+
+      - name: Desplegar boss-acarreos
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy boss-acarreos --no-verify-jwt \
+            --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - name: Desplegar y verificar servicio push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy boss-push --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF" --yes
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/boss-push")" = 401
+
+      - name: Desplegar boss-login
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy boss-login --no-verify-jwt \
+            --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - name: Verificar que acarreo exige una sesión
+        run: |
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"accion":"listar"}' \
+            "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/boss-acarreos")"
+          test "$status" = 401
