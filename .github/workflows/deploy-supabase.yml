@@ -2,6 +2,9 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches: [destinos-adicionales-materiales]
+    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
@@ -35,6 +38,7 @@ jobs:
             cat supabase/migrations/20261121232500_boss_solicitudes_materiales.sql
             cat supabase/migrations/20261121233000_boss_categorias_materiales.sql
             cat supabase/migrations/20261121233500_boss_responsable_acarreo.sql
+            cat supabase/migrations/20261122101500_boss_destinos_materiales.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
@@ -64,6 +68,11 @@ jobs:
               (id, solicitado_por, categoria, descripcion, cantidad)
             select gen_random_uuid(), 'PruebaDeploy', categoria, 'Verificación temporal', 1
             from (values ('Filtros'), ('Repuestos'), ('Otros')) as nuevas(categoria);
+            insert into public.boss_solicitudes_materiales
+              (id, solicitado_por, categoria, descripcion, cantidad, equipo_adicional, vehiculo)
+            select gen_random_uuid(), 'PruebaDeploy', 'Filtros', 'Verificación temporal', 1, equipo, vehiculo
+            from (values ('Bulldozer D8R', null), ('Payloader HL770', null),
+                         ('Jumbo', null), ('Vehículo', 'Camioneta de prueba')) destinos(equipo, vehiculo);
             update public.boss_solicitudes_materiales set estado = 'Aprobada' where id = prueba;
             if not exists (select 1 from public.boss_solicitudes_materiales where id = prueba and estado = 'Aprobada') then
               raise exception 'No se pudo comprobar el flujo de solicitudes';
