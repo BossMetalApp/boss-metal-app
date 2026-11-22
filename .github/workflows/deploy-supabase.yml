@@ -33,9 +33,11 @@ jobs:
             printf 'begin;\n'
             cat supabase/migrations/20261121230000_boss_acarreos.sql
             cat supabase/migrations/20261121230500_boss_crear_supervisor.sql
+            cat supabase/migrations/20261121231000_boss_lectura_sesiones.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
+          select usuario_id from public.boss_sesiones where token_hash = repeat('0', 64) and expira_en > now();
           select public.boss_crear_supervisor(current_setting('boss.deploy_test_user'), '7419');
           reset role;
           do $$
