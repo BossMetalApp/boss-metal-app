@@ -989,12 +989,12 @@ async function loadProductionCharts() {
 function chartDataset(data, measure) {
   const days = Array.from({length:data.days},(_,index)=>({
     date:graphDateOffset(data.start,index),
-    Diurno:{value:0,units:new Set()}, Nocturno:{value:0,units:new Set()},
+    Diurno:{value:0,trips:0,tons:0,units:new Set()}, Nocturno:{value:0,trips:0,tons:0,units:new Set()},
   }));
   const lookup = new Map(days.map(day=>[day.date,day]));
   const units = new Map();
   const names = new Map([...DEFAULT_E,...E].map(unit=>[unit.id,unit.name]));
-  let total=0, prior=0, previousReports=0, currentReports=0;
+  let totalTrips=0, totalTons=0, total=0, prior=0, previousReports=0, currentReports=0;
   for (const [date,shift,code,name,trips,tons] of data.series) {
     const value = Number(measure==='viajes'?trips:tons);
     if (date<data.start) {
@@ -1004,14 +1004,25 @@ function chartDataset(data, measure) {
     }
     const day = lookup.get(date);
     if (!day || !day[shift]) continue;
+    totalTrips+=Number(trips);
+    totalTons+=Number(tons);
     total+=value;
     currentReports++;
     day[shift].value+=value;
+    day[shift].trips+=Number(trips);
+    day[shift].tons+=Number(tons);
     day[shift].units.add(code);
-    if (!units.has(code)) units.set(code,{code,name:names.get(code)||name,value:0});
-    units.get(code).value+=value;
+    if (!units.has(code)) units.set(code,{code,name:names.get(code)||name,trips:0,tons:0,value:0});
+    const unit = units.get(code);
+    unit.value+=value;
+    unit.trips+=Number(trips);
+    unit.tons+=Number(tons);
   }
-  return {days,units:[...units.values()].sort((a,b)=>b.value-a.value||a.code.localeCompare(b.code,'es',{numeric:true})),total,prior,previousReports,currentReports};
+  return {totalTrips,totalTons,days,units:[...units.values()].sort((a,b)=>b.value-a.value||a.code.localeCompare(b.code,'es',{numeric:true})),total,prior,previousReports,currentReports};
+}
+
+function graphPair(trips,tons) {
+  return trips.toLocaleString('es-VE')+(trips===1?' viaje / ':' viajes / ')+fmt(tons)+' t';
 }
 
 function graphValue(value) {
@@ -1023,7 +1034,7 @@ function graphValue(value) {
 function renderProductionCharts() {
   if (!graphData) return;
   const data = chartDataset(graphData,graphMeasure.value);
-  $('boss-graf-total').textContent = data.currentReports ? graphValue(data.total) : 'Sin registros';
+  $('boss-graf-total').textContent = data.currentReports ? graphPair(data.totalTrips,data.totalTons) : 'Sin registros';
   let comparison = 'Sin registros en el período anterior.';
   if (data.previousReports && data.currentReports) {
     if (data.prior===0) comparison = data.total===0 ? 'Ambos períodos con producción cero.' : 'Período anterior: cero producción.';
@@ -1057,19 +1068,28 @@ function showGraphUnits(periodData) {
     if (shift) shifts = [shift];
   }
   $('boss-graf-alcance').textContent = scope;
+  let detail = scope+' · '+(data.currentReports ? graphPair(data.totalTrips,data.totalTons) : 'Sin registro');
+  if (graphSelection?.shift) {
+    const entry = data.days[0][graphSelection.shift];
+    const expected = new Set([...DEFAULT_E.map(unit=>unit.id),...entry.units]).size;
+    if (entry.units.size) detail += ' · '+entry.units.size+' de '+expected+' volquetas reportadas';
+    if (entry.units.size===expected && entry.trips===0) detail += ' · Cero confirmado';
+  }
+  $('boss-graf-dia-detalle').textContent = detail;
   renderGraphUnits(data.units);
   const footer = $('boss-graf-totales');
   footer.replaceChildren();
   for (const shift of shifts) {
     const entries = data.days.map(day=>day[shift]);
     const reported = entries.some(entry=>entry.units.size);
-    const subtotal = entries.reduce((sum,entry)=>sum+entry.value,0);
+    const trips = entries.reduce((sum,entry)=>sum+entry.trips,0);
+    const tons = entries.reduce((sum,entry)=>sum+entry.tons,0);
     const line = document.createElement('div');
-    line.textContent = shift + ' · ' + (reported ? graphValue(subtotal) : 'Sin registro');
+    line.textContent = shift + ' · ' + (reported ? graphPair(trips,tons) : 'Sin registro');
     footer.append(line);
   }
   const total = document.createElement('strong');
-  total.textContent = 'Total · ' + (data.currentReports ? graphValue(data.total) : 'Sin registro');
+  total.textContent = 'Total · ' + (data.currentReports ? graphPair(data.totalTrips,data.totalTons) : 'Sin registro');
   footer.append(total);
 }
 
@@ -1092,8 +1112,7 @@ function renderGraphDays(days) {
       const entry = day[shift];
       const expected = new Set([...DEFAULT_E.map(unit=>unit.id),...entry.units]).size;
       const description = !entry.units.size ? 'Sin registro' :
-        entry.value===0 && entry.units.size===expected ? 'Cero confirmado' :
-        graphValue(entry.value)+' · '+entry.units.size+' de '+expected+' volquetas reportadas';
+        graphPair(entry.trips,entry.tons)+(entry.trips===0 && entry.units.size===expected?' · Cero confirmado':'')+' · '+entry.units.size+' de '+expected+' volquetas reportadas';
       const label = day.date+' · '+shift+' · '+description;
       const button = document.createElement('button');
       button.type = 'button';
@@ -1142,7 +1161,7 @@ function renderGraphUnits(units) {
     const name = document.createElement('strong');
     const amount = document.createElement('span');
     name.textContent = 'Unidad '+unit.code+' • '+unit.name;
-    amount.textContent = graphValue(unit.value);
+    amount.textContent = graphPair(unit.trips,unit.tons);
     summary.append(name,amount);
     const track = document.createElement('div');
     track.className = 'boss-graf-pista';
