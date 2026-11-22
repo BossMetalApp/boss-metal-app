@@ -1,9 +1,6 @@
 name: Deploy Supabase Functions
 
 on:
-  push:
-    branches: [descuento-guardia-completa]
-    paths: ['.github/workflows/deploy-supabase.yml']
   workflow_dispatch:
 
 concurrency:
