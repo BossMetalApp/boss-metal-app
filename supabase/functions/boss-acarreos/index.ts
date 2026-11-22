@@ -7,7 +7,7 @@ const headers = {
   "Access-Control-Allow-Headers": "authorization, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const fields = "id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo,observaciones,creado_en,actualizado_en,responsable";
+const fields = "id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo,observaciones,creado_en,actualizado_en,responsable,actualizado_por";
 
 function reply(body: object, status = 200) {
   return new Response(JSON.stringify(body), { status, headers });
@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
               row.responsable.trim().length > 0 && row.responsable.trim().length <= 150)))) {
         return reply({ ok: false, mensaje: "Revisa los datos de producción" }, 400);
       }
-      const { error } = await db.from("boss_acarreos").insert(rows.map((row) => ({
+      const registros = rows.map((row) => ({
         ...production(row),
         id: row.id,
         registrado_por: account.usuario,
@@ -253,8 +253,42 @@ Deno.serve(async (req) => {
         capacidad_m3: row.capacidad_m3,
         densidad: row.densidad,
         equipo: row.equipo,
-      })));
-      if (error?.code === "23505") return reply({ ok: false, mensaje: "Uno de los registros ya existe. Consulta el historial antes de repetir el envío." }, 409);
+      }));
+      const claves = new Set(registros.map(row => JSON.stringify([row.fecha, row.turno, row.unidad])));
+      if (claves.size !== registros.length) {
+        return reply({ ok: false, mensaje: "El envío contiene más de un total para la misma unidad, fecha y turno." }, 400);
+      }
+
+      const { error } = await db.from("boss_acarreos").insert(registros);
+      if (error?.code === "23505") {
+        const { data: previos, error: lookupError } = await db.from("boss_acarreos").select(fields)
+          .in("id", registros.map(row => row.id)).eq("registrado_por", account.usuario);
+        if (lookupError) throw lookupError;
+        const byId = new Map(previos.map(row => [row.id, row]));
+        if (registros.every(row => {
+          const previo = byId.get(row.id);
+          return previo && previo.fecha === row.fecha && previo.turno === row.turno &&
+            previo.unidad === row.unidad && previo.viajes === row.viajes &&
+            Number(previo.capacidad_m3) === row.capacidad_m3 && Number(previo.densidad) === row.densidad &&
+            previo.equipo === row.equipo && previo.observaciones === row.observaciones &&
+            previo.responsable === row.responsable;
+        })) return reply({ ok: true }, 200);
+
+        const found = [];
+        for (const row of registros) {
+          const { data: existente, error: duplicateError } = await db.from("boss_acarreos")
+            .select("viajes,registrado_por").eq("fecha", row.fecha).eq("turno", row.turno).eq("unidad", row.unidad).maybeSingle();
+          if (duplicateError) throw duplicateError;
+          if (existente) found.push("Unidad " + row.unidad + " · " + row.fecha + " · " + row.turno +
+            ": " + existente.viajes + " viajes, registrados por " + existente.registrado_por);
+        }
+        return reply({
+          ok: false,
+          mensaje: found.length ? "No se guardó el envío. Ya hay registro para: " + found.join("; ") +
+            ". Si cambió el total, pide al autor o a Admin que corrija el registro existente. Retira del formulario las unidades ya registradas para guardar las demás." :
+            "El envío ya existe. Revisa el historial antes de volver a intentarlo.",
+        }, 409);
+      }
       if (error) throw error;
       return reply({ ok: true }, 201);
     }
@@ -268,9 +302,13 @@ Deno.serve(async (req) => {
       let query = db.from("boss_acarreos").update({
         ...production(row),
         actualizado_en: new Date().toISOString(),
+        actualizado_por: account.usuario,
       }).eq("id", row.id).eq("actualizado_en", row.actualizado_en);
       if (!admin) query = query.eq("registrado_por", account.usuario);
       const { data, error } = await query.select(fields).maybeSingle();
+      if (error?.code === "23505") {
+        return reply({ ok: false, mensaje: "Ya existe un total para esa unidad, fecha y turno." }, 409);
+      }
       if (error) throw error;
       if (!data) return reply({ ok: false, mensaje: "Registro no disponible o actualizado. Recarga el historial." }, 409);
       return reply({ ok: true, registro: data });
