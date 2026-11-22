@@ -7,7 +7,7 @@
   let selected=null, report=null, equipment=[], version=0, saving=false;
   function closeEditor() { selected=null;el('form').hidden=true;el('form').reset(); }
   window.resetNomina=()=>{
-    version++;closeEditor();report=null;equipment=[];saving=false;
+    version++;reportVersion++;payrollPeriod=null;el('periodo').value='quincena';el('dia-grupo').hidden=true;closeEditor();report=null;equipment=[];saving=false;
     el('admin').hidden=true;
     for(const id of ['lista','resumen','supervisor','maquinas','estado','vigencia']) el(id).replaceChildren();
     el('alta').reset();el('fijo').reset();el('fecha').value='';
@@ -50,7 +50,25 @@
       button.onclick=()=>edit(w);list.append(button);
     }
   }
-  function selectedDay(){return el('periodo').value==='dia'?el('fecha').value:null;}
+  let payrollPeriod=null, reportVersion=0;
+  function todayCaracas(){
+    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Caracas',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const part=name=>parts.find(p=>p.type===name).value;
+    return [part('year'),part('month'),part('day')].join('-');
+  }
+  async function refreshSummary(){
+    const seq=++reportVersion, session=bossSession, day=selectedDay();
+    report=null;
+    if(!session || !isBossAdmin(session) || !payrollPeriod)return;
+    if(el('periodo').value==='dia' && !day){el('resumen').textContent='Selecciona la fecha del resumen.';return;}
+    if(!day || (day>=payrollPeriod.desde && day<=payrollPeriod.hasta)){renderReport(payrollPeriod);return;}
+    el('resumen').textContent='Consultando la fecha…';
+    try {
+      const data=await requestProduction(session,{accion:'nomina_resumen',fecha:day});
+      if(seq===reportVersion && session===bossSession)renderReport(data);
+    }catch(e){if(seq===reportVersion && session===bossSession)el('resumen').textContent=e.message;}
+  }
+  function selectedDay(){return el('periodo').value==='dia'?el('fecha-resumen').value:null;}
   function dayNumber(date){return Date.parse(date+'T00:00:00Z')/86400000;}
   function summaryRows(data,date=selectedDay()){
     const byPerson=new Map();
@@ -95,7 +113,7 @@
     banner.append(text('span',selectedDay()?fecha(selectedDay()):fecha(data.desde)+' al '+fecha(data.hasta)),text('small','Total calculado'),text('strong',money(total)));
     root.append(banner);
     if(rows.some(r=>r.pending))root.append(text('p','Hay montos pendientes de definir.'));
-    const select=el('supervisor');select.replaceChildren(new Option('Seleccionar',''));
+
     const groups=new Map(['Choferes','Operadores','Personal de apoyo','Vigilancia','Supervisores','Costos fijos'].map(name=>[name,[]]));
     const groupNames={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia',Supervisor:'Supervisores','Costo fijo':'Costos fijos'};
     for(const row of rows)groups.get(groupNames[row.w.cargo]||'Personal de apoyo').push(row);
@@ -117,15 +135,15 @@
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
       for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
       group.append(block);
-      if(r.w.cargo==='Supervisor')select.add(new Option(r.w.nombre,r.w.id));
+
     }
     }
-    el('vigencia').textContent='Vigente desde la quincena del '+data.desde+'.';
+
   }
   async function load(message=''){
     const session=bossSession;if(!session)return;
     const seq=++version, admin=isBossAdmin(session),fecha=el('fecha').value;
-    closeEditor();report=null;el('resumen').replaceChildren();el('lista').replaceChildren();
+    reportVersion++;payrollPeriod=null;closeEditor();report=null;el('resumen').replaceChildren();el('lista').replaceChildren();
     el('admin').hidden=true;el('estado').textContent='Consultando nómina…';
     try{
       const [day,summary,machines]=await Promise.all([
@@ -138,7 +156,12 @@
       const names=new Set([...availabilityExtra.map(x=>x.nombre),...equipment.map(x=>x.nombre)]);
       el('maquinas').replaceChildren(...[...names].map(name=>new Option(name,name)));
       renderPeople(day.personal);
-      if(admin){renderReport(summary);el('admin').hidden=false;}
+      if(admin){
+        payrollPeriod=summary;
+        el('supervisor').replaceChildren(new Option('Seleccionar',''),...summary.personal.filter(w=>w.cargo==='Supervisor').map(w=>new Option(w.nombre,w.id)));
+        el('vigencia').textContent='Vigente desde la quincena del '+summary.desde+'.';
+        el('admin').hidden=false;refreshSummary();
+      }
       el('estado').textContent=message;
     }catch(err){if(seq===version && session===bossSession)el('estado').textContent=err.message;}
   }
@@ -173,7 +196,13 @@
   };
   el('fecha').onchange=el('turno').onchange=el('actualizar').onclick=()=>load();
   el('cancelar').onclick=closeEditor;
-  el('periodo').onchange=()=>{if(report)renderReport(report);};
+  el('periodo').onchange=()=>{
+    const daily=el('periodo').value==='dia';
+    el('dia-grupo').hidden=!daily;
+    if(daily)el('fecha-resumen').value=todayCaracas();
+    refreshSummary();
+  };
+  el('fecha-resumen').onchange=refreshSummary;
   el('excel').onclick=()=>{
     if(!report || !isBossAdmin(bossSession))return;
     const summary=[['Desde','Hasta','Trabajador','Cargo','Diurnos','Nocturnos','Faltas','Permisos','USD calculados','Pendiente','Descuento guardias USD']];
