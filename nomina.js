@@ -68,18 +68,36 @@
   function renderReport(data){
     report=data;const root=el('resumen');root.replaceChildren();
     const rows=summaryRows(data), total=rows.reduce((sum,r)=>sum+Math.round(Number(r.pay)*100),0)/100;
-    root.append(text('p',data.desde+' al '+data.hasta),text('strong','Total calculado · '+money(total)));
+    const banner=document.createElement('div');
+    banner.className='nom-total';
+    const fecha=v=>v.split('-').reverse().join('/');
+    banner.append(text('span',fecha(data.desde)+' al '+fecha(data.hasta)),text('small','Total calculado'),text('strong',money(total)));
+    root.append(banner);
     if(rows.some(r=>r.pending))root.append(text('p','Hay montos pendientes de definir.'));
     const select=el('supervisor');select.replaceChildren(new Option('Seleccionar',''));
-    for(const r of rows){
+    const groups=new Map(['Choferes','Operadores','Personal de apoyo','Vigilancia','Supervisores','Costos fijos'].map(name=>[name,[]]));
+    const groupNames={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia',Supervisor:'Supervisores','Costo fijo':'Costos fijos'};
+    for(const row of rows)groups.get(groupNames[row.w.cargo]||'Personal de apoyo').push(row);
+    function heading(label,amount){
+      const summary=document.createElement('summary');
+      summary.append(text('span',label),text('b',amount));return summary;
+    }
+    for(const [name,members] of groups){
+      if(!members.length)continue;
+      const group=document.createElement('details');group.className='nom-grupo';
+      const subtotal=members.reduce((sum,row)=>sum+Math.round(Number(row.pay)*100),0)/100;
+      group.append(heading(name,members.every(row=>row.pay==null)?'Pendiente':money(subtotal)));
+      root.append(group);
+      for(const r of members){
       const block=document.createElement('details');
-      block.append(text('summary',r.w.nombre+' · '+(r.pay==null?r.pending:money(r.pay))));
+      block.append(heading(r.w.nombre,r.pay==null?r.pending:money(r.pay)));
       block.append(text('p',r.w.cargo+(r.fixed?' · Fijo quincenal':' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
       if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.w.sueldo)+' · Descuento por guardias '+money(r.w.descuento_guardias||0)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
       for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
-      root.append(block);
+      group.append(block);
       if(r.w.cargo==='Supervisor')select.add(new Option(r.w.nombre,r.w.id));
+    }
     }
     el('vigencia').textContent='Vigente desde la quincena del '+data.desde+'.';
   }
