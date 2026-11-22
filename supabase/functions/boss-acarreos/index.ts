@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (req.method !== "POST") return reply({ ok: false, mensaje: "Método no permitido" }, 405);
 
+  let etapa = "sesion";
   try {
     const token = req.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
     if (!token) return reply({ ok: false, mensaje: "Inicia sesión nuevamente" }, 401);
@@ -58,6 +59,7 @@ Deno.serve(async (req) => {
     if (sessionError) throw sessionError;
     if (!session) return reply({ ok: false, mensaje: "La sesión expiró o no es válida" }, 401);
 
+    etapa = "cuenta";
     const { data: account, error: accountError } = await db.from("boss_usuarios")
       .select("usuario,rol,activo").eq("id", session.usuario_id).maybeSingle();
     if (accountError) throw accountError;
@@ -70,6 +72,7 @@ Deno.serve(async (req) => {
     if (body?.accion === "listar_supervisores" || body?.accion === "crear_supervisor" || body?.accion === "estado_supervisor") {
       if (!admin) return reply({ ok: false, mensaje: "Solo administradores" }, 403);
       if (body.accion === "listar_supervisores") {
+        etapa = "lista";
         const { data, error } = await db.from("boss_usuarios").select("usuario,activo")
           .eq("rol", "supervisor").order("usuario");
         if (error) throw error;
@@ -86,6 +89,7 @@ Deno.serve(async (req) => {
         if (typeof body.pin !== "string" || !/^[0-9]{4}$/.test(body.pin)) {
           return reply({ ok: false, mensaje: "El PIN debe tener cuatro dígitos" }, 400);
         }
+        etapa = "alta";
         const { error } = await db.rpc("boss_crear_supervisor", { p_usuario: user, p_pin: body.pin });
         if (error?.code === "23505") return reply({ ok: false, mensaje: "Ese usuario ya existe" }, 409);
         if (error) throw error;
@@ -158,7 +162,10 @@ Deno.serve(async (req) => {
     }
 
     return reply({ ok: false, mensaje: "Acción inválida" }, 400);
-  } catch {
-    return reply({ ok: false, mensaje: "No se pudo procesar el registro" }, 500);
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    const reference = etapa + "-" + (/^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/.test(code) ? code : "interno");
+    console.error("boss-acarreos", reference);
+    return reply({ ok: false, mensaje: "No se pudo procesar el registro (" + reference + ")" }, 500);
   }
 });
