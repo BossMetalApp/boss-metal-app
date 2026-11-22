@@ -55,7 +55,11 @@ async function load(){
   const [desde,hasta]=bounds(date,mode);
   by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
   by('groups').replaceChildren();by('period').textContent='';by('total').textContent='…';
-  by('destinos').replaceChildren(...['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>e.nombre)].map(n=>new Option(n,n)));
+  const selector=by('destinos'), previous=selector.value;
+  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>e.nombre)]);
+  selector.replaceChildren(...Array.from(destinos,n=>new Option(n,n)),new Option('Otro vehículo o equipo…','__otro'));
+  if(previous && (destinos.has(previous)||previous==='__otro'))selector.value=previous;
+  mostrarOtro();
   try{
     const dates=[desde];
     if(desde.slice(-2)<='15' && hasta.slice(-2)>'15')dates.push(desde.slice(0,8)+'16');
@@ -82,12 +86,18 @@ async function load(){
 }
 window.abrirGastos=load;
 by('date').onchange=by('mode').onchange=load;
-by('add').onclick=()=>{if(form.hidden){form.elements.day.value=by('date').value;form.elements.unit.value='General';}form.hidden=false;form.scrollIntoView();};
+function mostrarOtro(){
+  const otro=form.elements.unit.value==='__otro';
+  by('otro-label').hidden=!otro;
+  form.elements.otro.required=otro;
+}
+form.elements.unit.onchange=mostrarOtro;
+by('add').onclick=()=>{if(form.hidden){form.elements.day.value=by('date').value;form.elements.unit.value='General';mostrarOtro();}form.hidden=false;form.scrollIntoView();};
 by('cancel').onclick=()=>{if(!saving){form.reset();form.hidden=true;pending=null;}};
 form.onsubmit=async event=>{
   event.preventDefault();if(saving || !isBossAdmin(bossSession))return;
   const session=bossSession,f=form.elements;
-  const data={fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:f.unit.value.trim()};
+  const data={fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:(f.unit.value==='__otro'?f.otro.value:f.unit.value).trim()};
   const key=JSON.stringify(data);
   if(!pending || key!==pending.key)pending={key,id:crypto.randomUUID()};
   saving=true;const controls=[...form.elements];controls.forEach(c=>c.disabled=true);
