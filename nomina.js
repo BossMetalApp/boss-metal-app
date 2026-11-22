@@ -41,7 +41,7 @@
   function renderPeople(people){
     const list=el('lista');list.replaceChildren();
     if(!people.length) list.textContent='Sin personal por turno registrado para esta fecha.';
-    const lastPositions = new Map(['Mecánico','Ayudante de mecánico','Chequeador','Vigilante 1','Vigilante 2'].map((name,index)=>[name,index]));
+    const lastPositions = new Map(['Mecánico','Ayudante de mecánico','Chequeador','Vigilante Diurno','Vigilante Nocturno'].map((name,index)=>[name,index]));
     const ordered = [...people].sort((a,b)=>(lastPositions.get(a.nombre) ?? -1)-(lastPositions.get(b.nombre) ?? -1));
     for(const w of ordered){
       const button=text('button',w.nombre);button.type='button';
