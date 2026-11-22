@@ -572,9 +572,8 @@ function updateVehicleField() {
 $('materiales-unidad').onchange = updateVehicleField;
 
 function openMaterials() {
-  const admin = isBossAdmin(bossSession);
   $('materiales-nueva').hidden = bossSession?.rol !== 'supervisor';
-  $('materiales-titulo').textContent = admin ? 'Solicitudes de materiales' : 'Mis solicitudes';
+  $('materiales-titulo').textContent = 'Solicitudes de materiales';
   const select = $('materiales-unidad');
   const previous = select.value;
   select.replaceChildren(new Option('Sin unidad asignada', ''));
@@ -598,7 +597,7 @@ function appendMaterialCard(item, admin) {
   summary.textContent = [item.categoria, 'Cantidad: ' + item.cantidad, item.unidad ? 'Unidad ' + item.unidad : item.vehiculo ? 'Vehículo: ' + item.vehiculo : item.equipo_adicional].filter(Boolean).join(' · ');
   const details = document.createElement('p');
   details.className = 'muted';
-  details.textContent = [admin ? item.solicitado_por : '', new Date(item.creado_en).toLocaleString('es-VE')].filter(Boolean).join(' · ');
+  details.textContent = [item.solicitado_por, new Date(item.creado_en).toLocaleString('es-VE')].filter(Boolean).join(' · ');
   const status = document.createElement('p');
   status.textContent = 'Estado: ' + item.estado;
   card.append(title, summary, details, status);

@@ -155,8 +155,7 @@ Deno.serve(async (req) => {
         if (!Number.isSafeInteger(offset) || offset < 0) {
           return reply({ ok: false, mensaje: "Página inválida" }, 400);
         }
-        let query = db.from(table).select(columns);
-        if (!admin) query = query.eq("solicitado_por", account.usuario);
+        const query = db.from(table).select(columns);
         const { data, error } = await query.order("creado_en", { ascending: false }).order("id").range(offset, offset + 49);
         if (error) throw error;
         return reply({ ok: true, solicitudes: data, siguiente: data.length === 50 ? offset + 50 : null });
