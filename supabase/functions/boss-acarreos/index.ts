@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       const descripcion = typeof body.descripcion === "string" ? body.descripcion.trim() : "";
       const unidad = body.unidad ?? null;
       const cantidad = body.cantidad;
-      if (!["Aceites", "Mangueras", "EPP"].includes(body.categoria) ||
+      if (!["Aceites", "Mangueras", "EPP", "Filtros", "Repuestos", "Otros"].includes(body.categoria) ||
           !descripcion || descripcion.length > 300 ||
           typeof cantidad !== "number" || !Number.isFinite(cantidad) || cantidad < 0.01 ||
           cantidad > 100000 || Number(cantidad.toFixed(2)) !== cantidad ||
