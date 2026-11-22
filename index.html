@@ -25,7 +25,7 @@ body.boss-authenticated #boss-login-screen{display:none}
     <div><label for="boss-export-from">Desde (opcional)</label><input type="date" id="boss-export-from"></div>
     <div><label for="boss-export-to">Hasta (opcional)</label><input type="date" id="boss-export-to"></div>
   </div>
-  <button type="submit" id="boss-export-button">Descargar Excel compartido (.xlsx)</button>
+  <button type="submit" id="boss-export-button">Descargar en plantilla corporativa (.xlsx)</button>
   <p id="boss-export-status" role="status"></p>
 </form>
   <button class="secondary" id="boss-history-refresh" type="button">Actualizar historial</button>
@@ -40,7 +40,7 @@ body.boss-authenticated #boss-login-screen{display:none}
     <div class="actions"><button id="boss-edit-save" type="submit">Guardar corrección</button><button id="boss-edit-cancel" class="secondary" type="button">Cancelar</button></div>
     <p id="boss-edit-status" role="status"></p>
   </form>
-</div></section><section id="historial"><div class="card"><h2>Historial y exportación de este dispositivo</h2><div class="actions"><button id="excel">Descargar Excel de este dispositivo (.xlsx)</button><button class="secondary" id="plantilla">Plantilla corporativa original</button><button class="secondary" id="json">Copia de seguridad (.json)</button><label style="margin:0;display:inline-block"><input id="importar" type="file" accept=".json,application/json" style="max-width:210px"></label></div><p class="muted">La exportación actual es un Excel básico de registros y resumen; la reproducción exacta de la plantilla corporativa sigue pendiente. Para restaurar, importa una copia JSON de esta aplicación.</p><div class="scroll"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Viajes</th><th>Toneladas</th><th>Responsable</th><th></th></tr></thead><tbody id="filas"></tbody></table></div></div></section><section id="equipos"><div class="card"><h2>Equipos y parámetros</h2><div class="scroll"><table><thead><tr><th>Unidad</th><th>Equipo</th><th>Capacidad m³</th><th>Densidad t/m³</th><th>Toneladas/viaje</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tablaEquipos"></tbody></table></div><p class="muted">La densidad de referencia es 0,83 t/m³. Los cambios no alteran los registros anteriores. Las unidades desactivadas no aparecen en el formulario de campo.</p><div class="card" style="background:#f3f8fb"><h3>Administrar unidades · prototipo local</h3><div class="note">Esta versión aún no tiene inicio de sesión ni permisos reales. No la compartas como sistema administrativo de producción hasta incorporar autenticación y sincronización.</div><div class="two"><div><label>Número de unidad</label><input id="equipoNumero" placeholder="Ej. 47" maxlength="12" /></div><div><label>Nombre / marca / color</label><input id="equipoNombre" placeholder="Ej. Mack blanco" maxlength="80" /></div></div><label>Capacidad por viaje (m³)</label><input id="equipoCapacidad" type="number" inputmode="decimal" min="0.01" max="1000" step="0.01" placeholder="Ej. 20.00"/><div class="actions"><button id="equipoAgregar">Agregar unidad</button><button class="secondary" id="equipoCancelar">Limpiar</button></div><p class="muted" id="equipoMensaje" role="status"></p></div></div></section><section id="usuarios"><div class="card">
+</div></section><section id="historial"><div class="card"><h2>Historial y exportación de este dispositivo</h2><div class="actions"><button id="excel">Descargar Excel de este dispositivo (.xlsx)</button><button class="secondary" id="plantilla">Plantilla corporativa original</button><button class="secondary" id="json">Copia de seguridad (.json)</button><label style="margin:0;display:inline-block"><input id="importar" type="file" accept=".json,application/json" style="max-width:210px"></label></div><p class="muted">Para restaurar el historial de este dispositivo, importa una copia JSON de esta aplicación.</p><div class="scroll"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Viajes</th><th>Toneladas</th><th>Responsable</th><th></th></tr></thead><tbody id="filas"></tbody></table></div></div></section><section id="equipos"><div class="card"><h2>Equipos y parámetros</h2><div class="scroll"><table><thead><tr><th>Unidad</th><th>Equipo</th><th>Capacidad m³</th><th>Densidad t/m³</th><th>Toneladas/viaje</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tablaEquipos"></tbody></table></div><p class="muted">La densidad de referencia es 0,83 t/m³. Los cambios no alteran los registros anteriores. Las unidades desactivadas no aparecen en el formulario de campo.</p><div class="card" style="background:#f3f8fb"><h3>Administrar unidades · prototipo local</h3><div class="note">Esta versión aún no tiene inicio de sesión ni permisos reales. No la compartas como sistema administrativo de producción hasta incorporar autenticación y sincronización.</div><div class="two"><div><label>Número de unidad</label><input id="equipoNumero" placeholder="Ej. 47" maxlength="12" /></div><div><label>Nombre / marca / color</label><input id="equipoNombre" placeholder="Ej. Mack blanco" maxlength="80" /></div></div><label>Capacidad por viaje (m³)</label><input id="equipoCapacidad" type="number" inputmode="decimal" min="0.01" max="1000" step="0.01" placeholder="Ej. 20.00"/><div class="actions"><button id="equipoAgregar">Agregar unidad</button><button class="secondary" id="equipoCancelar">Limpiar</button></div><p class="muted" id="equipoMensaje" role="status"></p></div></div></section><section id="usuarios"><div class="card">
   <h2>Supervisores</h2>
   <form id="boss-create-user" autocomplete="off">
     <div class="two">
@@ -78,7 +78,7 @@ body.boss-authenticated #boss-login-screen{display:none}
   <div id="materiales-lista"></div>
   <button class="secondary" id="materiales-mas" type="button" hidden>Ver más</button>
 </div>
-</section></main><script>
+</section></main><script src="excel-corporativo.js?v=1"></script><script>
 let bossSession = null;
 let operationDashboardRequest = 0;
 (function(){const endpoint='https://syixumzybwcqumaszzqa.supabase.co/functions/v1/boss-login';const form=document.getElementById('boss-login-box'),submit=document.getElementById('boss-submit'),error=document.getElementById('boss-login-error'),pin=document.getElementById('boss-pin');let token=null,expiry=0;function logout(){bossSession=null;resetSupervisorHistory();resetSupervisorAdmin();resetMaterials();token=null;expiry=0;pin.value='';document.body.classList.remove('boss-authenticated','boss-supervisor');document.getElementById('boss-who').textContent='';error.textContent='';}document.getElementById('boss-logout').addEventListener('click',logout);form.addEventListener('submit',async function(e){e.preventDefault();if(!/^[0-9]{4}$/.test(pin.value)){error.textContent='Introduce un PIN de cuatro dígitos.';return;}submit.disabled=true;submit.textContent='Verificando…';error.textContent='';try{const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);let response;try{response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:document.getElementById('boss-user').value.trim(),pin:pin.value}),cache:'no-store',signal:controller.signal});}finally{clearTimeout(timeout)}let result;try{result=await response.json()}catch{throw new Error('Respuesta no válida del servidor. Comprueba la configuración de la función.')}if(!response.ok||!result.ok||typeof result.token!=='string'||!result.expira_en){throw new Error(result.mensaje||'No fue posible iniciar sesión.')}expiry=Date.parse(result.expira_en);if(!Number.isFinite(expiry)||expiry<=Date.now())throw new Error('La sesión recibida no es válida.');token=result.token;pin.value='';document.getElementById('boss-who').textContent='Sesión: '+result.usuario;bossSession={token, usuario:result.usuario, rol:result.rol};document.getElementById('boss-users-tab').hidden=!['Admin','Admin2'].includes(result.usuario);if(result.rol==='supervisor'){configureProductionHistory(bossSession);openSupervisorHistory();document.body.classList.add('boss-supervisor');document.querySelector('[data-tab="campo"]').click();}document.body.classList.add('boss-authenticated');if(isBossAdmin(bossSession)){$('boss-dashboard-source').hidden=false;$('boss-dashboard-view').value='shared';configureProductionHistory(bossSession);if($('historial').classList.contains('show'))loadSupervisorHistory();if($('materiales').classList.contains('show'))openMaterials();render();}}catch(err){error.textContent=err.name==='AbortError'?'La conexión tardó demasiado. Inténtalo de nuevo.':(err instanceof TypeError?'No se pudo conectar al servidor de acceso.':err.message);pin.value='';}finally{submit.disabled=false;submit.textContent='Ingresar';}});setInterval(()=>{if(token&&Date.now()>=expiry){logout();error.textContent='Tu sesión expiró. Ingresa nuevamente.';}},30000);})();
@@ -544,49 +544,17 @@ materialForm.onsubmit = (event) => {
 
 const sharedExcelForm = $('boss-shared-excel');
 
-function sharedProductionSheets(records) {
-  const detail = [['ID','Fecha operativa','Turno','Unidad','Equipo','Viajes','Capacidad (m³)','Densidad (t/m³)','Volumen (m³)','Toneladas','Registrado por','Responsable','Observaciones','Fecha de captura','Última actualización']];
-  const byUnit = new Map();
-  const byDate = new Map();
-
-  for (const record of records) {
-    const trips = Number(record.viajes);
-    const capacity = Number(record.capacidad_m3);
-    const density = Number(record.densidad);
-    const volume = trips * capacity;
-    const tons = volume * density;
-    const daytime = record.turno === 'Diurno';
-    const cleanObservation = (record.observaciones ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
-    detail.push([record.id, record.fecha, record.turno, record.unidad, record.equipo,
-      trips, capacity, density, volume, tons, record.registrado_por, record.responsable ?? '',
-      cleanObservation, record.creado_en, record.actualizado_en]);
-
-    const unitKey = JSON.stringify([record.fecha, record.unidad]);
-    if (!byUnit.has(unitKey)) byUnit.set(unitKey, [record.fecha, record.unidad, record.equipo, 0, 0, 0, 0, 0, 0, 0]);
-    const unit = byUnit.get(unitKey);
-    unit[daytime ? 3 : 4] += trips;
-    unit[5] += trips;
-    unit[daytime ? 6 : 7] += tons;
-    unit[8] += volume;
-    unit[9] += tons;
-
-    if (!byDate.has(record.fecha)) byDate.set(record.fecha, [record.fecha, 0, 0, 0, 0, 0, 0, 0]);
-    const date = byDate.get(record.fecha);
-    date[daytime ? 1 : 2] += trips;
-    date[3] += trips;
-    date[daytime ? 4 : 5] += tons;
-    date[6] += volume;
-    date[7] += tons;
-  }
-
-  const totals = ['Viajes diurnos','Viajes nocturnos','Total viajes','Toneladas diurnas','Toneladas nocturnas','Volumen total (m³)','Toneladas totales'];
-  const orderedUnits = [...byUnit.values()].sort((a,b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1], 'es', {numeric:true}));
-  const orderedDates = [...byDate.values()].sort((a,b) => a[0].localeCompare(b[0]));
-  return [
-    {name:'Totales diarios', rows:[['Fecha operativa', ...totals], ...orderedDates]},
-    {name:'Producción por volqueta', rows:[['Fecha operativa','Unidad','Equipo', ...totals], ...orderedUnits]},
-    {name:'Detalle de registros', rows:detail},
-  ];
+function sharedProductionDetail(records) {
+  return [['ID','Fecha operativa','Turno','Unidad','Equipo','Viajes','Capacidad (m³)','Densidad (t/m³)','Volumen (m³)','Toneladas','Registrado por','Responsable','Observaciones','Fecha de captura','Última actualización'],
+    ...records.map(record => {
+      const trips = Number(record.viajes);
+      const capacity = Number(record.capacidad_m3);
+      const density = Number(record.densidad);
+      const volume = trips * capacity;
+      return [record.id, record.fecha, record.turno, record.unidad, record.equipo,
+        trips, capacity, density, volume, volume * density, record.registrado_por,
+        record.responsable, record.observaciones, record.creado_en, record.actualizado_en];
+    })];
 }
 
 sharedExcelForm.onsubmit = async (event) => {
@@ -626,7 +594,7 @@ sharedExcelForm.onsubmit = async (event) => {
       status.textContent = 'No hay viajes compartidos en las fechas seleccionadas.';
       return;
     }
-    download(xlsx(sharedProductionSheets(records)), 'BossMetal_HistorialCompartido_' + today() + '.xlsx');
+    download(corporateProductionExcel(records, desde, hasta), 'BossMetal_PlantillaCorporativa_' + today() + '.xlsx');
     status.textContent = records.length + ' registros incluidos en el Excel.';
   } catch (error) {
     if (bossSession === session) status.textContent = error.message || 'No se pudo descargar el Excel.';
