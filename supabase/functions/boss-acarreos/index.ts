@@ -104,6 +104,32 @@ Deno.serve(async (req) => {
       return reply({ ok: true });
     }
 
+    if (body?.accion === "importar_historial") {
+      if (!admin) return reply({ ok: false, mensaje: "Solo administradores" }, 403);
+      etapa = "importacion";
+      const rows = body.registros;
+      if (!Array.isArray(rows) || rows.length < 1 || rows.length > 100 ||
+          new Set(rows.map((row) => row?.id)).size !== rows.length ||
+          !rows.every((row) => validProduction(row) && validId(row.id) &&
+            typeof row.unidad === "string" && /^[A-Za-z0-9-]{1,12}$/.test(row.unidad) &&
+            Number.isFinite(row.capacidad_m3) && row.capacidad_m3 > 0 && row.capacidad_m3 <= 1000 &&
+            Number.isFinite(row.densidad) && row.densidad > 0 && row.densidad <= 100 &&
+            typeof row.equipo === "string" && row.equipo.trim().length > 0 && row.equipo.length <= 150 &&
+            typeof row.responsable === "string" && row.responsable.length <= 150 &&
+            typeof row.creado_en === "string" && /^[0-9]{4}-/.test(row.creado_en) &&
+            Number.isFinite(Date.parse(row.creado_en)))) {
+        return reply({ ok: false, mensaje: "Revisa los registros históricos de este lote" }, 400);
+      }
+
+      const { data, error } = await db.rpc("boss_importar_acarreos", {
+        p_usuario: account.usuario,
+        p_registros: rows,
+      });
+      if (error?.code === "23505") return reply({ ok: false, mensaje: "Un registro con el mismo identificador contiene datos diferentes. El lote no se aplicó." }, 409);
+      if (error) throw error;
+      return reply({ ok: true, resultado: data });
+    }
+
     if (body?.accion === "resumen_operacion") {
       etapa = "resumen";
       const { desde, hasta } = body;
