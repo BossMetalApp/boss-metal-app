@@ -50,7 +50,7 @@ body.boss-authenticated #boss-login-screen{display:none}
 .boss-graf-barra span{display:block;width:85%;height:var(--altura);min-height:4px;background:var(--serie);border-radius:3px 3px 0 0}
 .boss-graf-barra[data-estado="cero"] span{background:#a36b16}
 .boss-graf-barra[data-estado="vacio"] span{background:#b5c0ca}
-.boss-graf-fecha{display:block;margin-top:5px;white-space:nowrap}
+.boss-graf-fecha{display:block;background:transparent;border:0;color:inherit;font:inherit;padding:5px 1px;cursor:pointer;margin-top:5px;white-space:nowrap}
 .boss-graf-unidad{margin:12px 0}
 .boss-graf-unidad div:first-child{display:flex;justify-content:space-between;gap:8px;font-size:.9rem}
 .boss-graf-pista{height:8px;border-radius:5px;background:#dfe8f0;margin-top:4px;overflow:hidden}
@@ -68,7 +68,7 @@ body.boss-authenticated #boss-login-screen{display:none}
   <p id="boss-semaforo-resumen" role="status"></p>
   <progress id="boss-semaforo-barra" aria-label="Volquetas reportadas" hidden></progress>
   <div id="boss-semaforo-lista"></div>
-</div><div class="card"><h2>Tablero de producción</h2><div id="boss-dashboard-source" hidden><label for="boss-dashboard-view">Origen de los registros</label><select id="boss-dashboard-view"><option value="shared">Operación compartida</option><option value="local">Registros de este dispositivo</option></select></div><div class="two"><div><label>Desde</label><input type="date" id="desde"></div><div><label>Hasta</label><input type="date" id="hasta"></div></div><p class="muted">El promedio diario considera únicamente los días con viajes registrados.</p><p id="boss-dashboard-status" role="status" hidden></p><div class="grid" id="kpis"></div></div><div class="card"><h3>Producción por volqueta</h3><div class="scroll"><table><thead><tr><th>Equipo</th><th>Viajes</th><th>Toneladas</th><th>Participación</th></tr></thead><tbody id="porEquipo"></tbody></table></div></div><div class="card"><h3>Producción por turno</h3><div class="scroll"><table><thead><tr><th>Turno</th><th>Viajes</th><th>Toneladas</th></tr></thead><tbody id="porTurno"></tbody></table></div></div></section><section id="campo"><div class="card"><h2>Registrar producción</h2><div class="two"><div><label>Fecha operativa</label><input type="date" id="fecha"></div><div><label>Turno</label><select id="turno"><option>Diurno</option><option>Nocturno</option></select></div></div><p class="muted">Turno diurno: 7:00 a. m. a 7:00 p. m. · Nocturno: 7:00 p. m. a 7:00 a. m. del día siguiente. La fecha operativa del nocturno es la fecha en que inicia.</p><div class="four" id="entradas"></div><div class="card" style="background:#edf7f2"><h3>Total del turno</h3><div class="grid"><div><span class="muted">Viajes</span><h2 id="sumViajes">0</h2></div><div><span class="muted">Toneladas</span><h2 id="sumTon">0,00</h2></div></div></div><label for="responsable">Responsable</label><input id="responsable" maxlength="150" placeholder="Nombre del trabajador"><label>Observaciones</label><input id="obs" maxlength="2000" placeholder="Opcional"><p class="muted">Escribe 0 para confirmar que una volqueta no hizo viajes. Deja vacío lo que todavía no vas a reportar.</p><div class="actions"><button id="guardar">Guardar producción</button><button class="secondary" id="limpiar">Limpiar campos</button></div><p id="mensaje" role="status"></p></div>
+</div><div class="card"><h2>Tablero de producción</h2><div id="boss-dashboard-source" hidden><label for="boss-dashboard-view">Origen de los registros</label><select id="boss-dashboard-view"><option value="shared">Operación compartida</option><option value="local">Registros de este dispositivo</option></select></div><div class="two"><div><label>Desde</label><input type="date" id="desde"></div><div><label>Hasta</label><input type="date" id="hasta"></div></div><p class="muted">El promedio diario considera únicamente los días con viajes registrados.</p><p id="boss-dashboard-status" role="status" hidden></p><div class="grid" id="kpis"></div></div><div class="card"><h3>Producción por volqueta</h3><p id="boss-graf-alcance" class="muted"></p><button type="button" id="boss-graf-periodo-completo" hidden>Ver todo el período</button><div class="scroll"><table><thead><tr><th>Equipo</th><th>Viajes</th><th>Toneladas</th><th>Participación</th></tr></thead><tbody id="porEquipo"></tbody></table></div></div><div class="card"><h3>Producción por turno</h3><div class="scroll"><table><thead><tr><th>Turno</th><th>Viajes</th><th>Toneladas</th></tr></thead><tbody id="porTurno"></tbody></table></div></div></section><section id="campo"><div class="card"><h2>Registrar producción</h2><div class="two"><div><label>Fecha operativa</label><input type="date" id="fecha"></div><div><label>Turno</label><select id="turno"><option>Diurno</option><option>Nocturno</option></select></div></div><p class="muted">Turno diurno: 7:00 a. m. a 7:00 p. m. · Nocturno: 7:00 p. m. a 7:00 a. m. del día siguiente. La fecha operativa del nocturno es la fecha en que inicia.</p><div class="four" id="entradas"></div><div class="card" style="background:#edf7f2"><h3>Total del turno</h3><div class="grid"><div><span class="muted">Viajes</span><h2 id="sumViajes">0</h2></div><div><span class="muted">Toneladas</span><h2 id="sumTon">0,00</h2></div></div></div><label for="responsable">Responsable</label><input id="responsable" maxlength="150" placeholder="Nombre del trabajador"><label>Observaciones</label><input id="obs" maxlength="2000" placeholder="Opcional"><p class="muted">Escribe 0 para confirmar que una volqueta no hizo viajes. Deja vacío lo que todavía no vas a reportar.</p><div class="actions"><button id="guardar">Guardar producción</button><button class="secondary" id="limpiar">Limpiar campos</button></div><p id="mensaje" role="status"></p></div>
 <div class="card" id="boss-own-history" hidden>
   <h2 id="boss-history-heading">Mis registros</h2>
 <form id="boss-shared-excel" hidden>
@@ -168,7 +168,7 @@ body.boss-authenticated #boss-login-screen{display:none}
       <p id="boss-graf-dia-detalle" role="status" class="muted"></p>
     </div>
     <div class="card boss-graf-panel">
-      <h3>Producción por volqueta</h3>
+      <h3>Producción por volqueta</h3><p id="boss-graf-alcance" class="muted"></p><button type="button" id="boss-graf-periodo-completo" hidden>Ver todo el período</button>
       <div id="boss-graf-unidades"></div>
     </div>
   </div>
@@ -892,6 +892,7 @@ const graphResults = $('boss-graf-resultados');
 const graphDayMs = 86400000;
 let graphRequest = 0, graphData = null;
 
+let graphSelection = null;
 function graphDateOffset(date, days) {
   return new Date(Date.parse(date) + days * graphDayMs).toISOString().slice(0,10);
 }
@@ -917,6 +918,7 @@ async function loadProductionCharts() {
   const session = bossSession;
   if (!session) return;
   const request = ++graphRequest;
+  graphSelection = null;
   graphData = null;
   graphResults.hidden = true;
   const {start,end} = graphPeriodDates();
@@ -994,9 +996,28 @@ function renderProductionCharts() {
   const {start,end,priorStart,priorEnd} = graphData;
   $('boss-graf-rangos').textContent = start+' al '+end+' · Anterior: '+priorStart+' al '+priorEnd;
   renderGraphDays(data.days);
-  renderGraphUnits(data.units);
+  showGraphUnits(data.units);
   graphResults.hidden = false;
 }
+
+function showGraphUnits(periodUnits) {
+  const reset = $('boss-graf-periodo-completo');
+  reset.hidden = !graphSelection;
+  if (!graphSelection) {
+    $('boss-graf-alcance').textContent = 'Todo el período';
+    renderGraphUnits(periodUnits);
+    return;
+  }
+  const {date,shift} = graphSelection;
+  const series = graphData.series.filter(row => row[0] === date && (!shift || row[1] === shift));
+  $('boss-graf-alcance').textContent = date + ' · ' + (shift || 'Ambos turnos');
+  renderGraphUnits(chartDataset({start:date,days:1,series},graphMeasure.value).units);
+}
+
+$('boss-graf-periodo-completo').onclick = () => {
+  graphSelection = null;
+  renderProductionCharts();
+};
 
 function renderGraphDays(days) {
   const root = $('boss-graf-dias');
@@ -1021,19 +1042,30 @@ function renderGraphDays(days) {
       button.dataset.estado = !entry.units.size ? 'vacio' : entry.value===0 ? 'cero' : 'valor';
       button.setAttribute('aria-label',label);
       button.title = label;
-      button.onclick = () => {detail.textContent=label;};
+      button.onclick = () => {
+        graphSelection = {date:day.date,shift};
+        detail.textContent = label;
+        showGraphUnits();
+      };
       const bar = document.createElement('span');
       bar.style.setProperty('--altura',(100*entry.value/highest)+'%');
       button.append(bar);
       bars.append(button);
     }
-    const label = document.createElement('span');
+    const label = document.createElement('button');
+    label.type = 'button';
     label.className = 'boss-graf-fecha';
+    label.setAttribute('aria-label','Ver ambos turnos del '+day.date);
+    label.onclick = () => {
+      graphSelection = {date:day.date,shift:null};
+      detail.textContent = day.date + ' · Ambos turnos';
+      showGraphUnits();
+    };
     label.textContent = day.date.slice(8)+'/'+day.date.slice(5,7);
     group.append(bars,label);
     root.append(group);
   }
-  detail.textContent = 'Toca una barra para ver el total y cuántas volquetas reportaron. Gris: sin registro. Ámbar: cero viajes reportados.';
+  detail.textContent = 'Toca una fecha para ver las volquetas del día o una barra para ver un turno. Gris: sin registro. Ámbar: cero viajes reportados.';
 }
 
 function renderGraphUnits(units) {
