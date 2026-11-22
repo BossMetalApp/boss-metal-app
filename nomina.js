@@ -58,8 +58,8 @@
     }
     return data.personal.map(w=>{
       const rows=byPerson.get(w.id)||[], worked=rows.filter(r=>r.estado==='Trabajó');
-      const fixed=w.cargo==='Supervisor';
-      return {w,rows,day:worked.filter(r=>r.turno==='Diurno').length,night:worked.filter(r=>r.turno==='Nocturno').length,
+      const fixed=w.cargo==='Supervisor' || w.cargo==='Costo fijo' || (w.cargo==='Vigilante' && w.sueldo!=null);
+      return {w,rows,fixed,day:worked.filter(r=>r.turno==='Diurno').length,night:worked.filter(r=>r.turno==='Nocturno').length,
         absent:rows.filter(r=>r.estado==='Faltó').length,permits:rows.filter(r=>r.estado==='Permiso').length,
         pay:fixed?w.sueldo:rows.reduce((sum,r)=>sum+(Number(r.monto)||0),0),
         pending:fixed && w.sueldo==null?'Sueldo pendiente de configurar':rows.some(r=>r.monto==null)?'Permiso pendiente de valoración':''};
@@ -74,9 +74,9 @@
     for(const r of rows){
       const block=document.createElement('details');
       block.append(text('summary',r.w.nombre+' · '+(r.pay==null?r.pending:money(r.pay))));
-      block.append(text('p',r.w.cargo+(r.w.cargo==='Supervisor'?' · Sueldo fijo':' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
+      block.append(text('p',r.w.cargo+(r.fixed?' · Fijo quincenal':' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
-      for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(entry.monto==null?'Pendiente':money(entry.monto))));
+      for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
       root.append(block);
       if(r.w.cargo==='Supervisor')select.add(new Option(r.w.nombre,r.w.id));
     }
