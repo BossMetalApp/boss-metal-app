@@ -56,6 +56,10 @@ body.boss-authenticated #boss-login-screen{display:none}
       <div><label for="materiales-cantidad">Cantidad</label><input id="materiales-cantidad" type="number" min="0.01" max="100000" step="0.01" inputmode="decimal" required></div>
       <div><label for="materiales-unidad">Unidad o equipo</label><select id="materiales-unidad"></select></div>
     </div>
+    <div id="materiales-vehiculo-campo" hidden>
+      <label for="materiales-vehiculo">¿Cuál vehículo?</label>
+      <input id="materiales-vehiculo" maxlength="100" placeholder="Ej. Camioneta de servicio ABC123" disabled>
+    </div>
     <div class="actions"><button id="materiales-enviar" type="submit">Enviar solicitud</button></div>
   </form>
 </div>
@@ -376,6 +380,7 @@ const materialsMore = $('materiales-mas');
 function resetMaterials() {
   Object.assign(materials, {busy: false, next: null, pending: null});
   materialForm.reset();
+  updateVehicleField();
   $('materiales-nueva').hidden = true;
   materialList.replaceChildren();
   materialStatus.textContent = '';
@@ -391,6 +396,17 @@ function setMaterialsBusy(busy) {
   materialList.querySelectorAll('button, select').forEach(item => { item.disabled = busy; });
 }
 
+function updateVehicleField() {
+  const visible = $('materiales-unidad').value === 'extra:Vehículo';
+  const input = $('materiales-vehiculo');
+  $('materiales-vehiculo-campo').hidden = !visible;
+  input.required = visible;
+  input.disabled = !visible;
+  if (!visible) input.value = '';
+}
+
+$('materiales-unidad').onchange = updateVehicleField;
+
 function openMaterials() {
   const admin = isBossAdmin(bossSession);
   $('materiales-nueva').hidden = bossSession?.rol !== 'supervisor';
@@ -401,7 +417,11 @@ function openMaterials() {
   for (const unit of E.filter(item => item.active !== false)) {
     select.add(new Option(unit.id + ' · ' + unit.name, unit.id));
   }
+  for (const equipo of ['Bulldozer D8R', 'Payloader HL770', 'Jumbo', 'Vehículo']) {
+    select.add(new Option(equipo, 'extra:' + equipo));
+  }
   if ([...select.options].some(option => option.value === previous)) select.value = previous;
+  updateVehicleField();
   updateMaterials();
 }
 
@@ -411,7 +431,7 @@ function appendMaterialCard(item, admin) {
   const title = document.createElement('h3');
   title.textContent = item.descripcion;
   const summary = document.createElement('p');
-  summary.textContent = [item.categoria, 'Cantidad: ' + item.cantidad, item.unidad && 'Unidad ' + item.unidad].filter(Boolean).join(' · ');
+  summary.textContent = [item.categoria, 'Cantidad: ' + item.cantidad, item.unidad ? 'Unidad ' + item.unidad : item.vehiculo ? 'Vehículo: ' + item.vehiculo : item.equipo_adicional].filter(Boolean).join(' · ');
   const details = document.createElement('p');
   details.className = 'muted';
   details.textContent = [admin ? item.solicitado_por : '', new Date(item.creado_en).toLocaleString('es-VE')].filter(Boolean).join(' · ');
@@ -453,6 +473,7 @@ async function updateMaterials(action = null, append = false) {
       if (bossSession !== session) return;
       if (action.accion === 'materiales_crear') {
         materialForm.reset();
+        updateVehicleField();
         materials.pending = null;
         notice = 'Solicitud enviada.';
       } else {
@@ -482,14 +503,22 @@ materialsMore.onclick = () => updateMaterials(null, true);
 materialForm.onsubmit = (event) => {
   event.preventDefault();
   if (bossSession?.rol !== 'supervisor' || materials.busy) return;
+  const selected = $('materiales-unidad').value;
+  const equipo = selected.startsWith('extra:') ? selected.slice(6) : null;
   const payload = {
     categoria: $('materiales-categoria').value,
     descripcion: $('materiales-descripcion').value.trim(),
     cantidad: Number($('materiales-cantidad').value),
-    unidad: $('materiales-unidad').value || null,
+    unidad: equipo ? null : selected || null,
+    equipo_adicional: equipo,
+    vehiculo: equipo === 'Vehículo' ? $('materiales-vehiculo').value.trim() : null,
   };
   if (!payload.descripcion) {
     materialStatus.textContent = 'Escribe el material que necesitas.';
+    return;
+  }
+  if (equipo === 'Vehículo' && !payload.vehiculo) {
+    materialStatus.textContent = 'Indica cuál es el vehículo.';
     return;
   }
   const fingerprint = JSON.stringify(payload);

@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     if (["materiales_listar", "materiales_crear", "materiales_estado"].includes(body?.accion)) {
       etapa = "materiales";
       const table = "boss_solicitudes_materiales";
-      const columns = "id,solicitado_por,categoria,descripcion,cantidad,unidad,estado,creado_en,actualizado_en";
+      const columns = "id,solicitado_por,categoria,descripcion,cantidad,unidad,equipo_adicional,vehiculo,estado,creado_en,actualizado_en";
 
       if (body.accion === "materiales_listar") {
         const offset = body.offset ?? 0;
@@ -108,6 +108,13 @@ Deno.serve(async (req) => {
       if (admin) return reply({ ok: false, mensaje: "Usa una cuenta de supervisor para solicitar materiales" }, 403);
       const descripcion = typeof body.descripcion === "string" ? body.descripcion.trim() : "";
       const unidad = body.unidad ?? null;
+      const equipoAdicional = body.equipo_adicional ?? null;
+      const vehiculo = typeof body.vehiculo === "string" ? body.vehiculo.trim() : null;
+      if ((equipoAdicional !== null &&
+          (!["Bulldozer D8R", "Payloader HL770", "Jumbo", "Vehículo"].includes(equipoAdicional) || unidad !== null)) ||
+          (equipoAdicional === "Vehículo" ? !vehiculo || vehiculo.length > 100 : body.vehiculo != null)) {
+        return reply({ ok: false, mensaje: "Selecciona un equipo válido o indica cuál es el vehículo" }, 400);
+      }
       const cantidad = body.cantidad;
       if (!["Aceites", "Mangueras", "EPP", "Filtros", "Repuestos", "Otros"].includes(body.categoria) ||
           !descripcion || descripcion.length > 300 ||
@@ -118,13 +125,15 @@ Deno.serve(async (req) => {
       }
       const { error } = await db.from(table).upsert({
         id: body.id, solicitado_por: account.usuario, categoria: body.categoria,
-        descripcion, cantidad, unidad,
+        descripcion, cantidad, unidad, equipo_adicional: equipoAdicional, vehiculo,
       }, { onConflict: "id", ignoreDuplicates: true });
       if (error) throw error;
       const { data, error: readError } = await db.from(table).select("id")
         .eq("id", body.id).eq("solicitado_por", account.usuario).eq("categoria", body.categoria)
         .eq("descripcion", descripcion).eq("cantidad", cantidad)
-        .filter("unidad", unidad === null ? "is" : "eq", unidad).maybeSingle();
+        .filter("unidad", unidad === null ? "is" : "eq", unidad)
+        .filter("equipo_adicional", equipoAdicional === null ? "is" : "eq", equipoAdicional)
+        .filter("vehiculo", vehiculo === null ? "is" : "eq", vehiculo).maybeSingle();
       if (readError) throw readError;
       if (!data) return reply({ ok: false, mensaje: "No se pudo confirmar esta solicitud" }, 409);
       return reply({ ok: true }, 201);
