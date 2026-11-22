@@ -1,5 +1,5 @@
-const CACHE = 'bossmetal-v5';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx', './avisos.js?v=1'];
+const CACHE = 'bossmetal-v6';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx', './avisos.js?v=1', './nomina.js?v=7f0ca87', './excel-corporativo.js?v=2'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4'].map(name => caches.delete(name)))
+    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4', 'bossmetal-v5'].map(name => caches.delete(name)))
       .then(() => self.clients.claim())
   );
 });
@@ -22,10 +22,22 @@ self.addEventListener('fetch', event => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-cache' }).catch(async () => {
+      (async () => {
         const cache = await caches.open(CACHE);
-        return (await cache.match(request, { ignoreSearch: true })) ?? Response.error();
-      })
+        const home = new URL('./index.html', self.registration.scope).href;
+        const path = new URL(request.url).pathname;
+        const isHome = path === new URL(home).pathname || path === new URL(self.registration.scope).pathname;
+        let response;
+        try {
+          response = await fetch(request, { cache: 'reload' });
+        } catch {
+          return (isHome && await cache.match(home)) || Response.error();
+        }
+        if (isHome && response.ok && response.headers.get('content-type')?.includes('text/html')) {
+          await cache.put(home, response.clone()).catch(() => {});
+        }
+        return response;
+      })()
     );
     return;
   }
