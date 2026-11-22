@@ -172,6 +172,7 @@
         el('admin').hidden=false;refreshSummary();
       }
       el('estado').textContent=message;
+      return true;
     }catch(err){if(seq===version && session===bossSession)el('estado').textContent=err.message;}
   }
   async function save(event,body){
@@ -225,6 +226,7 @@
     summary.push(['','','Total calculado','','','','','',cents/100,'']);
     download(xlsx([{name:selectedDay()?'Resumen diario':'Resumen quincenal',rows:summary},{name:'Asistencia',rows:entries}]),'BossMetal_Nomina_'+(selectedDay()||report.desde+'_'+report.hasta)+'.xlsx');
   };
+  window.actualizarNomina=()=>selected || saving ? Promise.resolve(false) : load();
   window.abrirNomina=()=>{
     if(!el('fecha').value){const current=operationalShift();el('fecha').value=el('ingreso').value=current.date;el('turno').value=current.shift;}
     load();
