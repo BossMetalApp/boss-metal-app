@@ -39,8 +39,8 @@ body.boss-authenticated #boss-login-screen{display:none}
 .boss-graf-comparacion{margin:4px 0;font-weight:650}
 .boss-graf-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;margin-bottom:10px}
 .boss-graf-leyenda span::before{content:"";display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:2px;background:var(--serie)}
-.boss-graf-diurno{--serie:#164576}
-.boss-graf-nocturno{--serie:#278475}
+.boss-graf-diurno{--serie:#edb900}
+.boss-graf-nocturno{--serie:#142d50}
 .boss-graf-barras{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(46px,1fr);gap:5px;padding:3px 1px 6px;min-width:0}
 .boss-graf-grupo{text-align:center;min-width:0;font-size:.73rem}
 .boss-graf-par{display:grid;grid-template-columns:1fr 1fr;gap:3px;height:116px;border-bottom:1px solid #bdcad6;align-items:stretch}
@@ -169,7 +169,7 @@ body.boss-authenticated #boss-login-screen{display:none}
     </div>
     <div class="card boss-graf-panel">
       <h3>Producción por volqueta</h3><p id="boss-graf-alcance" class="muted"></p><button type="button" id="boss-graf-periodo-completo" hidden>Ver todo el período</button>
-      <div id="boss-graf-unidades"></div>
+      <div id="boss-graf-unidades"></div><div id="boss-graf-totales" style="margin-top:1rem;border-top:1px solid #ccd5dd;padding-top:.5rem" aria-live="polite"></div>
     </div>
   </div>
 </section></main><script src="excel-corporativo.js?v=2"></script><script>
@@ -996,22 +996,38 @@ function renderProductionCharts() {
   const {start,end,priorStart,priorEnd} = graphData;
   $('boss-graf-rangos').textContent = start+' al '+end+' · Anterior: '+priorStart+' al '+priorEnd;
   renderGraphDays(data.days);
-  showGraphUnits(data.units);
+  showGraphUnits(data);
   graphResults.hidden = false;
 }
 
-function showGraphUnits(periodUnits) {
+function showGraphUnits(periodData) {
   const reset = $('boss-graf-periodo-completo');
   reset.hidden = !graphSelection;
-  if (!graphSelection) {
-    $('boss-graf-alcance').textContent = 'Todo el período';
-    renderGraphUnits(periodUnits);
-    return;
+  let data = periodData;
+  let shifts = ['Diurno','Nocturno'];
+  let scope = 'Todo el período';
+  if (graphSelection) {
+    const {date,shift} = graphSelection;
+    const series = graphData.series.filter(row => row[0] === date && (!shift || row[1] === shift));
+    data = chartDataset({start:date,days:1,series},graphMeasure.value);
+    scope = date + ' · ' + (shift || 'Ambos turnos');
+    if (shift) shifts = [shift];
   }
-  const {date,shift} = graphSelection;
-  const series = graphData.series.filter(row => row[0] === date && (!shift || row[1] === shift));
-  $('boss-graf-alcance').textContent = date + ' · ' + (shift || 'Ambos turnos');
-  renderGraphUnits(chartDataset({start:date,days:1,series},graphMeasure.value).units);
+  $('boss-graf-alcance').textContent = scope;
+  renderGraphUnits(data.units);
+  const footer = $('boss-graf-totales');
+  footer.replaceChildren();
+  for (const shift of shifts) {
+    const entries = data.days.map(day=>day[shift]);
+    const reported = entries.some(entry=>entry.units.size);
+    const subtotal = entries.reduce((sum,entry)=>sum+entry.value,0);
+    const line = document.createElement('div');
+    line.textContent = shift + ' · ' + (reported ? graphValue(subtotal) : 'Sin registro');
+    footer.append(line);
+  }
+  const total = document.createElement('strong');
+  total.textContent = 'Total · ' + (data.currentReports ? graphValue(data.total) : 'Sin registro');
+  footer.append(total);
 }
 
 $('boss-graf-periodo-completo').onclick = () => {
