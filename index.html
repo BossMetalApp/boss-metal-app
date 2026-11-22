@@ -13,7 +13,7 @@
     <div class="actions"><button id="boss-edit-save" type="submit">Guardar corrección</button><button id="boss-edit-cancel" class="secondary" type="button">Cancelar</button></div>
     <p id="boss-edit-status" role="status"></p>
   </form>
-</div></section><section id="historial"><div class="card"><h2>Historial y exportación</h2><div class="actions"><button id="excel">Descargar Excel (.xlsx)</button><button class="secondary" id="plantilla">Plantilla corporativa original</button><button class="secondary" id="json">Copia de seguridad (.json)</button><label style="margin:0;display:inline-block"><input id="importar" type="file" accept=".json,application/json" style="max-width:210px"></label></div><p class="muted">La exportación actual es un Excel básico de registros y resumen; la reproducción exacta de la plantilla corporativa sigue pendiente. Para restaurar, importa una copia JSON de esta aplicación.</p><div class="scroll"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Viajes</th><th>Toneladas</th><th>Responsable</th><th></th></tr></thead><tbody id="filas"></tbody></table></div></div></section><section id="equipos"><div class="card"><h2>Equipos y parámetros</h2><div class="scroll"><table><thead><tr><th>Unidad</th><th>Equipo</th><th>Capacidad m³</th><th>Densidad t/m³</th><th>Toneladas/viaje</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tablaEquipos"></tbody></table></div><p class="muted">La densidad de referencia es 0,83 t/m³. Los cambios no alteran los registros anteriores. Las unidades desactivadas no aparecen en el formulario de campo.</p><div class="card" style="background:#f3f8fb"><h3>Administrar unidades · prototipo local</h3><div class="note">Esta versión aún no tiene inicio de sesión ni permisos reales. No la compartas como sistema administrativo de producción hasta incorporar autenticación y sincronización.</div><div class="two"><div><label>Número de unidad</label><input id="equipoNumero" placeholder="Ej. 47" maxlength="12" /></div><div><label>Nombre / marca / color</label><input id="equipoNombre" placeholder="Ej. Mack blanco" maxlength="80" /></div></div><label>Capacidad por viaje (m³)</label><input id="equipoCapacidad" type="number" inputmode="decimal" min="0.01" max="1000" step="0.01" placeholder="Ej. 20.00"/><div class="actions"><button id="equipoAgregar">Agregar unidad</button><button class="secondary" id="equipoCancelar">Limpiar</button></div><p class="muted" id="equipoMensaje" role="status"></p></div></div></section><section id="usuarios"><div class="card">
+</div></section><section id="historial"><div class="card"><h2>Historial y exportación</h2><div class="actions"><button id="excel">Descargar Excel (.xlsx)</button><button class="secondary" id="plantilla">Plantilla corporativa original</button><button class="secondary" id="json">Copia de seguridad (.json)</button><button class="secondary" id="boss-migrate-history" type="button">Migrar registros a Supabase</button><label style="margin:0;display:inline-block"><input id="importar" type="file" accept=".json,application/json" style="max-width:210px"></label></div><p class="muted">La exportación actual es un Excel básico de registros y resumen; la reproducción exacta de la plantilla corporativa sigue pendiente. Para restaurar, importa una copia JSON de esta aplicación.</p><p id="boss-migrate-status" role="status"></p><div class="scroll"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Viajes</th><th>Toneladas</th><th>Responsable</th><th></th></tr></thead><tbody id="filas"></tbody></table></div></div></section><section id="equipos"><div class="card"><h2>Equipos y parámetros</h2><div class="scroll"><table><thead><tr><th>Unidad</th><th>Equipo</th><th>Capacidad m³</th><th>Densidad t/m³</th><th>Toneladas/viaje</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tablaEquipos"></tbody></table></div><p class="muted">La densidad de referencia es 0,83 t/m³. Los cambios no alteran los registros anteriores. Las unidades desactivadas no aparecen en el formulario de campo.</p><div class="card" style="background:#f3f8fb"><h3>Administrar unidades · prototipo local</h3><div class="note">Esta versión aún no tiene inicio de sesión ni permisos reales. No la compartas como sistema administrativo de producción hasta incorporar autenticación y sincronización.</div><div class="two"><div><label>Número de unidad</label><input id="equipoNumero" placeholder="Ej. 47" maxlength="12" /></div><div><label>Nombre / marca / color</label><input id="equipoNombre" placeholder="Ej. Mack blanco" maxlength="80" /></div></div><label>Capacidad por viaje (m³)</label><input id="equipoCapacidad" type="number" inputmode="decimal" min="0.01" max="1000" step="0.01" placeholder="Ej. 20.00"/><div class="actions"><button id="equipoAgregar">Agregar unidad</button><button class="secondary" id="equipoCancelar">Limpiar</button></div><p class="muted" id="equipoMensaje" role="status"></p></div></div></section><section id="usuarios"><div class="card">
   <h2>Supervisores</h2>
   <form id="boss-create-user" autocomplete="off">
     <div class="two">
@@ -225,6 +225,61 @@ async function saveSupervisorProduction(session, rows) {
 }
 
 
+const migrateHistoryButton = $('boss-migrate-history');
+const migrateHistoryStatus = $('boss-migrate-status');
+
+migrateHistoryButton.onclick = async () => {
+  const session = bossSession;
+  if (!isBossAdmin(session) || migrateHistoryButton.disabled) return;
+  const omitted = records.filter(row => Number(row.trips) === 0).length;
+  const history = records.filter(row => Number(row.trips) !== 0).map(row => ({
+    id: String(row.id ?? ''),
+    fecha: row.date,
+    turno: row.shift,
+    unidad: String(row.unit ?? ''),
+    viajes: Number(row.trips),
+    capacidad_m3: cap(row),
+    densidad: density(row),
+    equipo: row.equipmentName || E.find(unit => unit.id === row.unit)?.name || String(row.unit ?? ''),
+    observaciones: String(row.obs ?? ''),
+    responsable: String(row.name ?? ''),
+    creado_en: row.created || row.date + 'T00:00:00Z',
+  }));
+  if (!history.length) {
+    migrateHistoryStatus.textContent = 'Este dispositivo no tiene registros con viajes para migrar.';
+    return;
+  }
+  if (!confirm('¿Copiar ' + history.length + ' registros a Supabase? La app descargará un respaldo JSON antes de empezar.')) return;
+
+  $('json').click();
+  migrateHistoryButton.disabled = true;
+  let verified = 0, inserted = 0;
+  migrateHistoryStatus.textContent = 'Verificando historial…';
+  try {
+    for (let offset = 0; offset < history.length; offset += 100) {
+      if (bossSession !== session) return;
+      const {resultado} = await requestProduction(session, {
+        accion: 'importar_historial',
+        registros: history.slice(offset, offset + 100),
+      });
+      if (bossSession !== session) return;
+      verified += resultado.verificados;
+      inserted += resultado.insertados;
+      migrateHistoryStatus.textContent = verified + ' de ' + history.length + ' registros verificados.';
+    }
+    const trips = history.reduce((sum, row) => sum + row.viajes, 0);
+    const tons = history.reduce((sum, row) => sum + row.viajes * row.capacidad_m3 * row.densidad, 0);
+    migrateHistoryStatus.textContent = verified + ' registros verificados (' + inserted + ' nuevos). ' +
+      trips + ' viajes y ' + fmt(tons) + ' toneladas.' +
+      (omitted ? ' ' + omitted + ' registros sin viajes quedaron en el respaldo local.' : '');
+  } catch (error) {
+    if (bossSession === session) migrateHistoryStatus.textContent = verified + ' de ' + history.length +
+      ' registros verificados. ' + error.message + ' Puedes reintentar sin duplicar lotes ya verificados.';
+  } finally {
+    if (bossSession === session) migrateHistoryButton.disabled = false;
+  }
+};
+
 const supervisorAccounts = $('boss-supervisor-rows');
 const supervisorAccountStatus = $('boss-user-status');
 const supervisorCreateForm = $('boss-create-user');
@@ -235,6 +290,8 @@ function isBossAdmin(session) {
 }
 
 function resetSupervisorAdmin() {
+  migrateHistoryButton.disabled = false;
+  migrateHistoryStatus.textContent = '';
   $('boss-users-tab').hidden = true;
   supervisorAccounts.replaceChildren();
   supervisorCreateForm.reset();
