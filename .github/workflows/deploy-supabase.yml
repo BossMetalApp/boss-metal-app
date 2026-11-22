@@ -39,9 +39,11 @@ jobs:
             cat supabase/migrations/20261122102000_boss_disponibilidad_equipos.sql
             cat supabase/migrations/20261122102500_boss_registro_unico_turno.sql
             cat supabase/migrations/20261122103000_boss_registro_cero_viajes.sql
+            cat supabase/migrations/20261122103500_boss_graficas_produccion.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
+          select jsonb_typeof(public.boss_graficas_produccion(current_date - 14, current_date)) as tipo_graficas;
           do $$
           begin
             insert into public.boss_disponibilidad_equipos (clave, nombre, estado, actualizado_por)
