@@ -41,7 +41,45 @@ jobs:
             cat supabase/migrations/20261122103000_boss_registro_cero_viajes.sql
             cat supabase/migrations/20261122103500_boss_graficas_produccion.sql
             cat supabase/migrations/20261122120000_boss_avisos.sql
+            cat supabase/migrations/20261122140000_boss_nomina.sql
             cat <<'SQL'
+          do $$
+          declare
+            actor text := 'NomPrueba_'||substr(md5(random()::text),1,9);
+            id_persona uuid; params jsonb; resultado jsonb; fila jsonb; r record;
+          begin
+            perform public.boss_crear_supervisor(actor,'6815');
+            for r in select * from (values ('Chofer',35),('Operador',40),('Mecánico',35),('Ayudante de mecánico',30),('Chequeador',20),('Vigilante',18)) t(cargo,monto) loop
+              insert into public.boss_nomina_personal(nombre,cargo,desde) values(actor,r.cargo,'1899-11-01') returning id into id_persona;
+              params:=jsonb_build_object('accion','nomina_guardar','fecha','1899-11-15','turno','Nocturno','persona',id_persona,'estado','Trabajó','equipo','Jumbo','condicion','Operativa');
+              perform public.boss_nomina(actor,params);
+              if (select monto from public.boss_nomina_asistencia where persona=id_persona) is distinct from r.monto then raise exception 'Tarifa incorrecta'; end if;
+              begin
+                perform public.boss_nomina(actor,params);
+                raise exception 'Duplicado aceptado';
+              exception when unique_violation then null; end;
+              if r.cargo='Operador' then
+                perform public.boss_nomina(actor,params||'{"revision":1,"condicion":"Stand by"}');
+                if (select monto from public.boss_nomina_asistencia where persona=id_persona)<>20 then raise exception 'Medio turno incorrecto'; end if;
+                perform public.boss_nomina(actor,params||'{"revision":2,"condicion":"Falla durante el turno","decision":"Completo","nota":"Operó cinco horas"}');
+                if (select monto from public.boss_nomina_asistencia where persona=id_persona)<>40 then raise exception 'Decisión incorrecta'; end if;
+              end if;
+            end loop;
+            resultado:=public.boss_nomina(actor,'{"accion":"nomina_dia","fecha":"1899-11-15","turno":"Nocturno"}');
+            for fila in select value from jsonb_array_elements(resultado->'personal') loop
+              if (fila->'registro') ? 'monto' then raise exception 'Importe en asistencia'; end if;
+            end loop;
+            begin
+              perform public.boss_nomina(actor,'{"accion":"nomina_resumen","fecha":"1899-11-15"}');
+              raise exception 'Resumen accesible a supervisores';
+            exception when insufficient_privilege then null; end;
+            insert into public.boss_nomina_personal(nombre,cargo,desde) values(actor,'Supervisor','1899-11-01') returning id into id_persona;
+            perform public.boss_nomina('Admin',jsonb_build_object('accion','nomina_sueldo','fecha','1899-11-16','persona',id_persona,'monto',120));
+            resultado:=public.boss_nomina('Admin','{"accion":"nomina_resumen","fecha":"1899-11-30"}');
+            if resultado->>'desde'<>'1899-11-16' or resultado->>'hasta'<>'1899-11-30' or not exists(select 1 from jsonb_array_elements(resultado->'personal') w where w->>'id'=id_persona::text and w->>'sueldo'='120.00') then raise exception 'Resumen quincenal incorrecto'; end if;
+            raise exception using errcode='BM001',message='Retirar datos de prueba de nómina';
+          exception when sqlstate 'BM001' then null;
+          end $$;
           do $$
           declare titulo_turno text := 'turno:1899-12-28:Nocturno';
           begin
