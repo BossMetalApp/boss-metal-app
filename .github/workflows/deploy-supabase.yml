@@ -2,6 +2,9 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches: [categorias-solicitudes]
+    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
@@ -33,6 +36,7 @@ jobs:
             cat supabase/migrations/20261121231000_boss_lectura_sesiones.sql
             cat supabase/migrations/20261121231500_boss_resumen_operacion.sql
             cat supabase/migrations/20261121232500_boss_solicitudes_materiales.sql
+            cat supabase/migrations/20261121233000_boss_categorias_materiales.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
@@ -43,6 +47,10 @@ jobs:
             insert into public.boss_solicitudes_materiales
               (id, solicitado_por, categoria, descripcion, cantidad)
             values (prueba, 'PruebaDeploy', 'EPP', 'Verificación temporal', 1);
+            insert into public.boss_solicitudes_materiales
+              (id, solicitado_por, categoria, descripcion, cantidad)
+            select gen_random_uuid(), 'PruebaDeploy', categoria, 'Verificación temporal', 1
+            from (values ('Filtros'), ('Repuestos'), ('Otros')) as nuevas(categoria);
             update public.boss_solicitudes_materiales set estado = 'Aprobada' where id = prueba;
             if not exists (select 1 from public.boss_solicitudes_materiales where id = prueba and estado = 'Aprobada') then
               raise exception 'No se pudo comprobar el flujo de solicitudes';
