@@ -104,6 +104,21 @@ Deno.serve(async (req) => {
       return reply({ ok: true });
     }
 
+    if (body?.accion === "resumen_operacion") {
+      etapa = "resumen";
+      const { desde, hasta } = body;
+      if ((desde != null && !validDate(desde)) || (hasta != null && !validDate(hasta)) ||
+          (desde && hasta && desde > hasta)) {
+        return reply({ ok: false, mensaje: "Revisa el intervalo de fechas" }, 400);
+      }
+      const { data, error } = await db.rpc("boss_resumen_operacion", {
+        p_desde: desde ?? null,
+        p_hasta: hasta ?? null,
+      });
+      if (error) throw error;
+      return reply({ ok: true, resumen: data });
+    }
+
     if (body?.accion === "listar") {
       const offset = body.offset ?? 0;
       if (!Number.isSafeInteger(offset) || offset < 0 ||
