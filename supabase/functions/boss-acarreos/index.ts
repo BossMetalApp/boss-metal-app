@@ -26,7 +26,7 @@ function validDate(value: unknown): value is string {
 function validProduction(row: any) {
   return row && validDate(row.fecha) &&
     ["Diurno", "Nocturno"].includes(row.turno) &&
-    Number.isInteger(row.viajes) && row.viajes >= 1 && row.viajes <= 1000 &&
+    Number.isInteger(row.viajes) && row.viajes >= 0 && row.viajes <= 1000 &&
     typeof row.observaciones === "string" && row.observaciones.length <= 2000;
 }
 
@@ -198,6 +198,17 @@ Deno.serve(async (req) => {
       if (error) throw error;
       if (!data) return reply({ ok: false, mensaje: "Supervisor no encontrado" }, 404);
       return reply({ ok: true });
+    }
+
+    if (body?.accion === "semaforo_carga") {
+      etapa = "semaforo";
+      if (!validDate(body.fecha) || !["Diurno", "Nocturno"].includes(body.turno)) {
+        return reply({ ok: false, mensaje: "Revisa la fecha y el turno" }, 400);
+      }
+      const { data, error } = await db.from("boss_acarreos").select("unidad,viajes")
+        .eq("fecha", body.fecha).eq("turno", body.turno).order("unidad");
+      if (error) throw error;
+      return reply({ ok: true, registros: data });
     }
 
     if (body?.accion === "resumen_operacion") {

@@ -38,6 +38,7 @@ jobs:
             cat supabase/migrations/20261122101500_boss_destinos_materiales.sql
             cat supabase/migrations/20261122102000_boss_disponibilidad_equipos.sql
             cat supabase/migrations/20261122102500_boss_registro_unico_turno.sql
+            cat supabase/migrations/20261122103000_boss_registro_cero_viajes.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
@@ -82,6 +83,10 @@ jobs:
                 and antes->>'viajes' = '1' and despues->>'viajes' = '2'
             ) then
               raise exception 'La corrección no quedó registrada';
+            end if;
+            update public.boss_acarreos set viajes = 0, actualizado_por = 'Admin2', actualizado_en = now() where id = prueba;
+            if not exists (select 1 from public.boss_acarreos where id = prueba and viajes = 0) then
+              raise exception 'No quedó registrado el cero confirmado';
             end if;
             raise exception using errcode = 'BM001', message = 'Retirar el registro temporal';
           exception when sqlstate 'BM001' then

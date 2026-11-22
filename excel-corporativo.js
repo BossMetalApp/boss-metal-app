@@ -38,10 +38,11 @@ function corporateProductionExcel(records, from, to) {
     equipment.set(equipmentKey, [record.equipo, record.unidad, capacity, density]);
     if (!dates.has(record.fecha)) dates.set(record.fecha, new Map());
     const units = dates.get(record.fecha);
-    if (!units.has(record.unidad)) units.set(record.unidad, {name: record.equipo, shifts: [[0,0,0],[0,0,0]]});
+    if (!units.has(record.unidad)) units.set(record.unidad, {name: record.equipo, capacity, density, shifts: [[0,0,0],[0,0,0]]});
     const shift = units.get(record.unidad).shifts[record.turno === 'Diurno' ? 0 : 1];
     const trips = Number(record.viajes);
     const volume = trips * capacity;
+    shift[3] = true;
     shift[0] += trips;
     shift[1] += volume;
     shift[2] += volume * density;
@@ -54,7 +55,7 @@ function corporateProductionExcel(records, from, to) {
   for (const date of dateKeys) {
     const start = fieldRows.length + 1;
     const day = [0,0,0,0,0,0,0];
-    for (const [id, {name, shifts:[diurno,nocturno]}] of [...dates.get(date)].sort(([a],[b]) => a.localeCompare(b, 'es', {numeric:true}))) {
+    for (const [id, {name, capacity, density, shifts:[diurno,nocturno]}] of [...dates.get(date)].sort(([a],[b]) => a.localeCompare(b, 'es', {numeric:true}))) {
       const row = fieldRows.length + 1;
       const [dt,dv,dw] = diurno, [nt,nv,nw] = nocturno;
       const values = [dt,nt,dt+nt,dw,nw,dv+nv,dw+nw];
@@ -63,11 +64,11 @@ function corporateProductionExcel(records, from, to) {
       const unit = unitsById.get(id);
       unit.trips += dt+nt;
       unit.tons += dw+nw;
-      fieldRows.push(corporateRow(row, [corporateDate(date),name,id,dt||null,nt||null,
+      fieldRows.push(corporateRow(row, [corporateDate(date),name,id,dt|| (diurno[3] ? 0 : null),nt|| (nocturno[3] ? 0 : null),
         corporateFormula('SUM(D'+row+':E'+row+')',dt+nt),
-        corporateFormula('D'+row+'*'+(dt?dw/dt:nw/nt),dw),
-        corporateFormula('E'+row+'*'+(nt?nw/nt:dw/dt),nw),
-        corporateFormula('D'+row+'*'+(dt?dv/dt:nv/nt)+'+E'+row+'*'+(nt?nv/nt:dv/dt),dv+nv),
+        corporateFormula('D'+row+'*'+(dt?dw/dt:nt?nw/nt:capacity*density),dw),
+        corporateFormula('E'+row+'*'+(nt?nw/nt:dt?dw/dt:capacity*density),nw),
+        corporateFormula('D'+row+'*'+(dt?dv/dt:nt?nv/nt:capacity)+'+E'+row+'*'+(nt?nv/nt:dt?dv/dt:capacity),dv+nv),
         corporateFormula('SUM(G'+row+':H'+row+')',dw+nw)], [10,2,2,11,11,6,6,6,6,6], 18));
     }
     const row = fieldRows.length + 1;
@@ -87,8 +88,8 @@ function corporateProductionExcel(records, from, to) {
     corporateRow(4,['DESDE',corporateDate(from || dateKeys[0]),'HASTA',corporateDate(to || dateKeys.at(-1))],[2,3,2,3]),
     corporateRow(6,['TONELADAS (t)','VIAJES','PROMEDIO t/VIAJE','PROMEDIO TONELADAS/DÍA'],[4,4,4,4],42.75),
     corporateRow(7,[corporateFormula(sums('J'),total[6]),corporateFormula(sums('F'),total[2]),
-      corporateFormula('IFERROR(A7/B7,0)',total[6]/total[2]),
-      corporateFormula('IFERROR(A7/COUNTIFS('+interval+','+range('B')+',"TOTAL DIARIO"),0)',total[6]/dateKeys.length)],[5,5,5,9],64),
+      corporateFormula('IFERROR(A7/B7,0)',total[2]?total[6]/total[2]:0),
+      corporateFormula('IFERROR(A7/COUNTIFS('+interval+','+range('B')+',"TOTAL DIARIO",'+range('F')+',">0"),0)',total[2]?total[6]/dateKeys.filter(date=>[...dates.get(date).values()].some(unit=>unit.shifts.some(shift=>shift[0]>0))).length:0)],[5,5,5,9],64),
     corporateRow(10,['EQUIPO','TONELADAS (t)','VIAJES','% DE TONELADAS'],[7,7,7,4],42.75),
   ];
   const knownNames = new Map([['43','MACK-R688'],['44','PEGASO'],['45','VOLQUETA IVECO'],['46','MAZPARRO']]);
@@ -98,7 +99,7 @@ function corporateProductionExcel(records, from, to) {
     const unit = unitsById.get(id) ?? {name:knownNames.get(id),trips:0,tons:0};
     const filter = ','+range('C')+',"'+id+'"';
     board.push(corporateRow(row,[unit.name,corporateFormula(sums('J',filter),unit.tons),
-      corporateFormula(sums('F',filter),unit.trips),corporateFormula('IFERROR(B'+row+'/$A$7,0)',unit.tons/total[6])],[6,6,6,8],23));
+      corporateFormula(sums('F',filter),unit.trips),corporateFormula('IFERROR(B'+row+'/$A$7,0)',total[6]?unit.tons/total[6]:0)],[6,6,6,8],23));
   });
   const turnRow = 13+unitIds.length;
   board.push(corporateRow(turnRow,['TURNO','TONELADAS (t)','VIAJES'],[7,7,7],42.75));
