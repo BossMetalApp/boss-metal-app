@@ -2,6 +2,7 @@
 const by=id=>document.getElementById('gasto-'+id);
 const fmt=n=>new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).format(n);
 let entries=[],version=0,pending=null,saving=false;
+let balance=null, paymentAttempt=null;
 const form=by('form');
 function bounds(date,mode){
   if(mode==='Día')return [date,date];
@@ -13,9 +14,58 @@ function bounds(date,mode){
 function draw(){const date=by('date').value;if(!date)return;const [start,end]=bounds(date,document.querySelector('input[name="gasto-periodo"]:checked').value),rows=entries.filter(r=>r[0]>=start&&r[0]<=end),sum=rs=>rs.reduce((s,r)=>s+Math.round(r[2]*100),0)/100,display=d=>d.split('-').reverse().join('/');by('period').textContent=start===end?display(start):display(start)+' al '+display(end);by('total').textContent=fmt(sum(rows));const root=by('groups');root.replaceChildren();
 function section(name){const s=document.createElement('div');s.className='card';const h=document.createElement('h2');h.textContent=name;s.append(h);root.append(s);return s}
 function group(parent,label,items){const d=document.createElement('details'),h=document.createElement('summary'),b=document.createElement('b');h.append(label);b.textContent=fmt(sum(items));h.append(b);d.append(h);parent.append(d);return d}
-function detail(parent,items){for(const [day,concept,value,,unit] of items){const line=document.createElement('small');line.textContent=[display(day),concept,unit,fmt(value)].filter(Boolean).join(' · ');parent.append(line)}if(!items.length)parent.append('Sin gastos en este período.')}
+function detail(parent,items){for(const [day,concept,value,,unit,payer] of items){const line=document.createElement('small');line.textContent=[display(day),concept,unit,payer,fmt(value)].filter(Boolean).join(' · ');parent.append(line)}if(!items.length)parent.append('Sin gastos en este período.')}
 const cat=section('Resumen por partida');for(const name of ['Nómina','Repuestos','Consumibles','Oficina','Comida','Operacionales']){const cons=['Aceites','Mangueras','Filtros'],items=rows.filter(r=>name==='Consumibles'?cons.includes(r[3]):r[3]===name),g=group(cat,name,items);if(name==='Consumibles'){for(const c of cons){const part=items.filter(r=>r[3]===c);detail(group(g,c,part),part)}}else detail(g,items)}
 const eq=section('Por unidad o equipo'),assigned=rows.filter(r=>r[4] && r[4]!=='General');for(const u of new Set(assigned.map(r=>r[4]))){const items=assigned.filter(r=>r[4]===u);detail(group(eq,u,items),items)}if(!assigned.length)eq.append('Sin gastos asignados.');const general=rows.filter(r=>r[4]==='General');detail(group(section('Gastos generales'),'General',general),general)}
+function clearBalance(){
+  balance=null;by('saldo').textContent='';by('mov').replaceChildren();by('reponer').hidden=true;
+}
+function outstanding(){return (Math.round(balance.pagado*100)-Math.round(balance.repuesto*100))/100;}
+function movements(){
+  const expenses=entries.filter(r=>r[5]==='Admin2').map(r=>({fecha:r[0],tipo:'Pagado por Admin2',detalle:r[1],monto:r[2]}));
+  const payments=balance.movimientos.map(r=>({fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto}));
+  return expenses.concat(payments).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+function drawBalance(){
+  const saldo=outstanding(), box=by('mov');
+  by('saldo').textContent='Pagado por Admin2 · '+fmt(balance.pagado)+' | Repuesto · '+fmt(balance.repuesto)+' | Pendiente acumulado · '+fmt(saldo)+(balance.pendientes?' · '+balance.pendientes+' gastos por identificar en total':'');
+  by('reponer').hidden=bossSession.usuario!=='Admin' || saldo<=0;
+  const f=by('pago').elements;
+  if(!f.dia.value)f.dia.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
+  f.monto.max=saldo;
+  const moves=movements();
+  if(!moves.length)box.textContent='Sin movimientos en este período.';
+  for(const m of moves){
+    const line=document.createElement('p');line.textContent=[m.fecha,m.tipo,m.detalle,fmt(m.monto)].filter(Boolean).join(' · ');box.append(line);
+  }
+  for(const r of entries.filter(row=>row[5]==='Por identificar')){
+    const line=document.createElement('p'), select=document.createElement('select'), btn=document.createElement('button');
+    line.textContent=[r[0],r[1],r[4],fmt(r[2])].join(' · ');
+    select.add(new Option('Selecciona quién pagó',''));for(const actor of ['Admin','Admin2'])select.add(new Option(actor,actor));
+    btn.type='button';btn.textContent='Guardar pagador';btn.onclick=async()=>{
+      if(!select.value)return;
+      const session=bossSession;btn.disabled=true;
+      try{await requestProduction(session,{accion:'gastos_identificar',id:r[6],pagador:select.value});if(session===bossSession)await load();}
+      catch(e){if(session===bossSession)by('status').textContent=e.message;}finally{btn.disabled=false;}
+    };
+    line.append(select,btn);box.append(line);
+  }
+}
+by('pago').onsubmit=async event=>{
+  event.preventDefault();
+  const session=bossSession,f=event.target,btn=f.querySelector('button');
+  if(btn.disabled||session?.usuario!=='Admin')return;
+  const body={fecha:f.elements.dia.value,monto:Number(f.elements.monto.value),referencia:f.elements.ref.value.trim()};
+  const key=JSON.stringify(body);
+  if(paymentAttempt?.key!==key)paymentAttempt={key,id:crypto.randomUUID()};
+  btn.disabled=true;
+  try{
+    await requestProduction(session,{accion:'gastos_reponer',id:paymentAttempt.id,...body});
+    if(session!==bossSession)return;
+    paymentAttempt=null;f.reset();by('reponer').open=false;
+    if(await load())by('status').textContent='Reposición guardada. '+by('status').textContent;
+  }catch(e){if(session===bossSession)by('status').textContent=e.message;}finally{btn.disabled=false;}
+};
 function exportExpenses(){
   const date=by('date');
   if(!date.reportValidity())return;
@@ -29,20 +79,23 @@ function exportExpenses(){
   for(const name of ['Nómina','Repuestos','Consumibles','Oficina','Comida','Operacionales'])
     summary.push([name,amount(rows.filter(row=>category(row)===name)),start,end]);
   summary.push(['Total del período',amount(rows),start,end]);
-  const detail=[['Fecha','Partida','Tipo de consumible','Concepto','Unidad o destino','Monto (USD)']];
-  for(const row of rows)detail.push([row[0],category(row),consumables.includes(row[3])?row[3]:'',row[1],row[4]||'Nómina',row[2]]);
+  const detail=[['Fecha','Partida','Tipo de consumible','Concepto','Unidad o destino','Monto (USD)','Pagador']];
+  for(const row of rows)detail.push([row[0],category(row),consumables.includes(row[3])?row[3]:'',row[1],row[4]||'Nómina',row[2],row[5]||'']);
   const destinations=[['Unidad o destino','Monto (USD)']];
   for(const name of new Set(rows.map(r=>r[4]||'Nómina'))){
     const items=rows.filter(row=>(row[4]||'Nómina')===name);
     if(items.length)destinations.push([name,amount(items)]);
   }
-  const blob=xlsx([{name:'Resumen',rows:summary},{name:'Detalle',rows:detail},{name:'Por destino',rows:destinations}]);
+  const ledger=[['Concepto acumulado','USD'],['Pagado por Admin2',balance.pagado],['Repuesto por Admin',balance.repuesto],['Pendiente',outstanding()],[],['Fecha','Movimiento del período','Referencia o concepto','Monto (USD)']];
+  for(const m of movements())ledger.push([m.fecha,m.tipo,m.detalle,m.monto]);
+  const blob=xlsx([{name:'Resumen',rows:summary},{name:'Detalle',rows:detail},{name:'Por destino',rows:destinations},{name:'Reposiciones',rows:ledger}]);
   const url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download='BossMetal_Gastos_'+start+'_'+end+'.xlsx';
   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 by('exportar').onclick=exportExpenses;
 window.resetGastos=()=>{
+  clearBalance();by('pago').reset();by('reponer').open=false;paymentAttempt=null;
   version++;entries=[];pending=null;form.reset();form.hidden=true;
   by('groups').replaceChildren();by('total').textContent='';by('period').textContent='';
   by('status').textContent='';by('date').value='';$('gastos-tab').hidden=true;
@@ -53,7 +106,7 @@ async function load(){
   if(!by('date').value)by('date').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
   const date=by('date').value,mode=document.querySelector('input[name="gasto-periodo"]:checked').value;
   const [desde,hasta]=bounds(date,mode);
-  by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
+  clearBalance();by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
   by('groups').replaceChildren();by('period').textContent='';by('total').textContent='…';
   const selector=by('destinos'), previous=selector.value;
   const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>e.nombre)]);
@@ -64,10 +117,11 @@ async function load(){
     const dates=[desde];
     if(desde.slice(-2)<='15' && hasta.slice(-2)>'15')dates.push(desde.slice(0,8)+'16');
     const reports=await Promise.all(dates.map(fecha=>requestProduction(session,{accion:'nomina_resumen',fecha})));
+    const {saldo}=await requestProduction(session,{accion:'gastos_saldo',desde,hasta});
     const rows=[];let offset=0;
     for(;;){
       const {gastos}=await requestProduction(session,{accion:'gastos_listar',desde,hasta,offset});
-      for(const g of gastos)rows.push([g.fecha,g.concepto,Number(g.monto),g.partida,g.destino]);
+      for(const g of gastos)rows.push([g.fecha,g.concepto,Number(g.monto),g.partida,g.destino,g.pagador||'Por identificar',g.id]);
       if(gastos.length<500)break;
       offset+=gastos.length;
     }
@@ -80,7 +134,7 @@ async function load(){
       }
     }
     if(seq!==version || session!==bossSession)return false;
-    entries=rows;draw();by('status').textContent=incomplete?'Nómina con montos pendientes de definir.':'';
+    entries=rows;balance=saldo;draw();drawBalance();by('status').textContent=incomplete?'Nómina con montos pendientes de definir.':'';
     by('exportar').disabled=false;return true;
   }catch(error){if(seq===version)by('status').textContent=error.message;return false;}
 }
@@ -92,12 +146,12 @@ function mostrarOtro(){
   form.elements.otro.required=otro;
 }
 form.elements.unit.onchange=mostrarOtro;
-by('add').onclick=()=>{if(form.hidden){form.elements.day.value=by('date').value;form.elements.unit.value='General';mostrarOtro();}form.hidden=false;form.scrollIntoView();};
+by('add').onclick=()=>{if(form.hidden){form.elements.pagador.value=bossSession.usuario;form.elements.day.value=by('date').value;form.elements.unit.value='General';mostrarOtro();}form.hidden=false;form.scrollIntoView();};
 by('cancel').onclick=()=>{if(!saving){form.reset();form.hidden=true;pending=null;}};
 form.onsubmit=async event=>{
   event.preventDefault();if(saving || !isBossAdmin(bossSession))return;
   const session=bossSession,f=form.elements;
-  const data={fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:(f.unit.value==='__otro'?f.otro.value:f.unit.value).trim()};
+  const data={pagador:f.pagador.value,fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:(f.unit.value==='__otro'?f.otro.value:f.unit.value).trim()};
   const key=JSON.stringify(data);
   if(!pending || key!==pending.key)pending={key,id:crypto.randomUUID()};
   saving=true;const controls=[...form.elements];controls.forEach(c=>c.disabled=true);

@@ -69,9 +69,25 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
-    if (body?.accion === "gastos_guardar" || body?.accion === "gastos_listar") {
+    if (["gastos_guardar","gastos_listar","gastos_identificar","gastos_reponer","gastos_saldo"].includes(body?.accion)) {
       if (!admin) return reply({ok:false,mensaje:"Solo Administración puede acceder a gastos."},403);
       etapa = "gastos";
+      if (body.accion === "gastos_identificar") {
+        if (!validId(body.id) || !["Admin","Admin2"].includes(body.pagador)) return reply({ok:false,mensaje:"Revisa el pagador."},400);
+        const {data,error}=await db.from("boss_gastos").update({pagador:body.pagador}).eq("id",body.id).is("pagador",null).select("id");
+        if(error)throw error;
+        if(!data?.length)return reply({ok:false,mensaje:"El gasto ya fue identificado. Actualiza para consultarlo."},409);
+        return reply({ok:true});
+      }
+      if (body.accion === "gastos_reponer") {
+        if(account.usuario!=="Admin")return reply({ok:false,mensaje:"Solo Admin registra reposiciones."},403);
+        if (!validId(body.id)||!validDate(body.fecha)||typeof body.monto!=="number"||!(body.monto>0 && body.monto<1e12)||typeof body.referencia!=="string"||body.referencia.length>160)
+          return reply({ok:false,mensaje:"Revisa la fecha, el monto y la referencia."},400);
+        const {error}=await db.rpc("boss_reponer",{p_id:body.id,p_fecha:body.fecha,p_monto:body.monto,p_referencia:body.referencia.trim(),p_actor:account.usuario});
+        if(error?.code==="22023")return reply({ok:false,mensaje:error.message},400);
+        if(error)throw error;
+        return reply({ok:true});
+      }
       if (body.accion === "gastos_guardar") {
         const {id,fecha,concepto,partida,destino,monto} = body;
         if (typeof id !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id) ||
@@ -80,7 +96,9 @@ Deno.serve(async (req) => {
           typeof destino !== "string" || !destino.trim() || destino.length>160 ||
           typeof monto !== "number" || !(monto>0 && monto<1e12) || Number(monto.toFixed(2))!==monto)
           return reply({ok:false,mensaje:"Revisa los datos del gasto."},400);
-        const row={id,fecha,concepto:concepto.trim(),partida,destino:destino.trim(),monto,registrado_por:account.usuario};
+        const pagador=body.pagador??null;
+        if(pagador!==null && !["Admin","Admin2"].includes(pagador))return reply({ok:false,mensaje:"Revisa el pagador."},400);
+        const row={id,fecha,pagador,concepto:concepto.trim(),partida,destino:destino.trim(),monto,registrado_por:account.usuario};
         const {error}=await db.from("boss_gastos").insert(row);
         if(error?.code==="23505"){
           const {data,error:readError}=await db.from("boss_gastos").select("*").eq("id",id).single();
@@ -92,7 +110,12 @@ Deno.serve(async (req) => {
       const {desde,hasta,offset=0}=body;
       if(!validDate(desde)||!validDate(hasta)||hasta<desde||hasta.slice(0,7)!==desde.slice(0,7)||!Number.isSafeInteger(offset)||offset<0)
         return reply({ok:false,mensaje:"Revisa el período."},400);
-      const {data,error}=await db.from("boss_gastos").select("fecha,concepto,monto,partida,destino").gte("fecha",desde).lte("fecha",hasta)
+      if(body.accion==="gastos_saldo"){
+        const {data,error}=await db.rpc("boss_saldo_reposiciones",{p_desde:desde,p_hasta:hasta});
+        if(error)throw error;
+        return reply({ok:true,saldo:data});
+      }
+      const {data,error}=await db.from("boss_gastos").select("id,fecha,concepto,monto,partida,destino,pagador").gte("fecha",desde).lte("fecha",hasta)
         .order("creado_en").order("id").range(offset,offset+499);
       if(error)throw error;
       return reply({ok:true,gastos:data});
