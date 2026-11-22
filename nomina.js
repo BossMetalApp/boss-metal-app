@@ -25,12 +25,17 @@
   function edit(w){
     closeEditor();selected=w;
     const r=w.registro;
+    const assigned=availabilityExtra.find(item=>w.cargo==='Operador' && w.nombre==='Operador '+item.nombre);
+    const fixed=!!assigned && (!r?.equipo || r.equipo===assigned.nombre);
+    el('equipo').hidden=fixed;
+    document.querySelector('label[for="nom-equipo"]').hidden=fixed;
     el('nombre').textContent=w.nombre+' · '+w.cargo;
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
-    options.value=attendance(r)||'';el('equipo').value=r?.equipo||'';
+    options.value=attendance(r)||'';el('equipo').value=r?.equipo||assigned?.nombre||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
+    if(fixed && !r?.condicion) el('equipo').onchange();
     el('nota').value=r?.nota||'';fields();el('form').hidden=false;el('asistencia').focus();
   }
   function renderPeople(people){
