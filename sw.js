@@ -1,5 +1,5 @@
-const CACHE = 'bossmetal-v3';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon192.png', './icon512.png', './plantilla.xlsx'];
+const CACHE = 'bossmetal-v4';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    Promise.all(['bossmetal-v1', 'bossmetal-v2'].map(name => caches.delete(name)))
+    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3'].map(name => caches.delete(name)))
       .then(() => self.clients.claim())
   );
 });
