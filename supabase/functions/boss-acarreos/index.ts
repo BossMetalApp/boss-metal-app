@@ -200,6 +200,18 @@ Deno.serve(async (req) => {
       return reply({ ok: true });
     }
 
+    if (body?.accion === "graficas_produccion") {
+      etapa = "graficas";
+      const { desde, hasta } = body;
+      if (!validDate(desde) || !validDate(hasta) || desde > hasta ||
+          Date.parse(hasta) - Date.parse(desde) > 731 * 86400000) {
+        return reply({ ok: false, mensaje: "Revisa el rango de fechas de la gráfica" }, 400);
+      }
+      const { data, error } = await db.rpc("boss_graficas_produccion", {p_desde: desde, p_hasta: hasta});
+      if (error) throw error;
+      return reply({ ok: true, series: data });
+    }
+
     if (body?.accion === "semaforo_carga") {
       etapa = "semaforo";
       if (!validDate(body.fecha) || !["Diurno", "Nocturno"].includes(body.turno)) {
