@@ -7,7 +7,7 @@ const headers = {
   "Access-Control-Allow-Headers": "authorization, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const fields = "id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo,observaciones,creado_en,actualizado_en";
+const fields = "id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo,observaciones,creado_en,actualizado_en,responsable";
 
 function reply(body: object, status = 200) {
   return new Response(JSON.stringify(body), { status, headers });
@@ -197,19 +197,23 @@ Deno.serve(async (req) => {
     }
 
     if (body?.accion === "registrar") {
+      etapa = "registro";
       const rows = body.registros;
       if (!Array.isArray(rows) || rows.length < 1 || rows.length > 100 ||
           !rows.every((row) => validProduction(row) && validId(row.id) &&
             typeof row.unidad === "string" && /^[A-Za-z0-9-]{1,12}$/.test(row.unidad) &&
             Number.isFinite(row.capacidad_m3) && row.capacidad_m3 > 0 && row.capacidad_m3 <= 1000 &&
             Number.isFinite(row.densidad) && row.densidad > 0 && row.densidad <= 100 &&
-            typeof row.equipo === "string" && row.equipo.trim().length > 0 && row.equipo.length <= 150)) {
+            typeof row.equipo === "string" && row.equipo.trim().length > 0 && row.equipo.length <= 150 &&
+            (row.responsable === undefined || (admin && typeof row.responsable === "string" &&
+              row.responsable.trim().length > 0 && row.responsable.trim().length <= 150)))) {
         return reply({ ok: false, mensaje: "Revisa los datos de producción" }, 400);
       }
       const { error } = await db.from("boss_acarreos").insert(rows.map((row) => ({
         ...production(row),
         id: row.id,
         registrado_por: account.usuario,
+        responsable: admin ? row.responsable?.trim() ?? null : null,
         unidad: row.unidad,
         capacidad_m3: row.capacidad_m3,
         densidad: row.densidad,
