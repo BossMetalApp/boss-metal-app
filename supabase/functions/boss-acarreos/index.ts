@@ -69,6 +69,43 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    if (body?.accion === "avisos") {
+      let query = db.from("boss_avisos").select("id,titulo,mensaje,creado_en").order("id",{ascending:false}).limit(30);
+      if (Number.isSafeInteger(body.antes) && body.antes > 0) query = query.lt("id",body.antes);
+      const {data,error} = await query;
+      if (error) throw error;
+      return reply({ok:true,avisos:data});
+    }
+    if (body?.accion === "push_clave") {
+      let {data,error} = await db.from("boss_push_config").select("publica").eq("id",true).single();
+      if (error) throw error;
+      if (!data?.publica) {
+        const pair = await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
+        const jwk = await crypto.subtle.exportKey("jwk",pair.privateKey);
+        const raw = new Uint8Array(await crypto.subtle.exportKey("raw",pair.publicKey));
+        const publica = btoa(String.fromCharCode(...raw)).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+        const update = await db.from("boss_push_config").update({publica,privada:jwk.d}).eq("id",true).is("publica",null);
+        if (update.error) throw update.error;
+        ({data,error} = await db.from("boss_push_config").select("publica").eq("id",true).single());
+        if (error) throw error;
+      }
+      return reply({ok:true,clave:data!.publica});
+    }
+    if (body?.accion === "push_activar") {
+      const sub = body.suscripcion;
+      let endpoint: URL;
+      try { endpoint = new URL(sub?.endpoint); } catch { return reply({ok:false,mensaje:"Suscripción inválida"},400); }
+      if (endpoint.protocol!=="https:" || endpoint.port || endpoint.username || endpoint.password ||
+          !/^(?:[a-z0-9-]+\.)*push\.apple\.com$|^fcm\.googleapis\.com$|^updates\.push\.services\.mozilla\.com$|^(?:[a-z0-9-]+\.)+notify\.windows\.com$/.test(endpoint.hostname) ||
+          !/^[A-Za-z0-9_-]{22}$/.test(sub.keys?.auth||"") || !/^[A-Za-z0-9_-]{87}$/.test(sub.keys?.p256dh||"")) {
+        return reply({ok:false,mensaje:"Servicio de notificaciones incompatible"},400);
+      }
+      const {error} = await db.from("boss_push_dispositivos").upsert({endpoint:endpoint.href,usuario:account.usuario,
+        auth:sub.keys.auth,p256dh:sub.keys.p256dh},{onConflict:"endpoint"});
+      if (error) throw error;
+      return reply({ok:true});
+    }
+
     if (body?.accion === "disponibilidad_listar" || body?.accion === "disponibilidad_guardar") {
       etapa = "disponibilidad";
       const table = "boss_disponibilidad_equipos";

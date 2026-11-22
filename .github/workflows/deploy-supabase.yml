@@ -40,7 +40,25 @@ jobs:
             cat supabase/migrations/20261122102500_boss_registro_unico_turno.sql
             cat supabase/migrations/20261122103000_boss_registro_cero_viajes.sql
             cat supabase/migrations/20261122103500_boss_graficas_produccion.sql
+            cat supabase/migrations/20261122120000_boss_avisos.sql
             cat <<'SQL'
+          do $$
+          declare titulo_turno text := 'turno:1899-12-28:Nocturno';
+          begin
+            insert into public.boss_acarreos(id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo)
+            select gen_random_uuid()::text,'PruebaDeploy','1899-12-28','Nocturno',u,v,20,0.83,'Prueba'
+            from (values ('43',1),('44',2),('45',0)) t(u,v);
+            perform public.boss_revisar_turnos();
+            if exists(select 1 from public.boss_avisos where clave=titulo_turno) then raise exception 'Aviso prematuro'; end if;
+            insert into public.boss_acarreos(id,registrado_por,fecha,turno,unidad,viajes,capacidad_m3,densidad,equipo)
+            values(gen_random_uuid()::text,'PruebaDeploy','1899-12-28','Nocturno','46',0,20,0.83,'Prueba');
+            perform public.boss_revisar_turnos();
+            insert into public.boss_turnos_por_revisar values ('1899-12-28','Nocturno');
+            perform public.boss_revisar_turnos();
+            if (select count(*) from public.boss_avisos where clave=titulo_turno and mensaje like '%3 viajes · 49,80 toneladas') <> 1 then raise exception 'Total o cantidad de avisos incorrectos'; end if;
+            raise exception using errcode='BM001',message='Retirar prueba de avisos';
+          exception when sqlstate 'BM001' then null;
+          end $$;
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
           select jsonb_typeof(public.boss_graficas_produccion(current_date - 14, current_date)) as tipo_graficas;
@@ -148,6 +166,13 @@ jobs:
         run: |
           supabase functions deploy boss-acarreos --no-verify-jwt \
             --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - name: Desplegar y verificar servicio push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy boss-push --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF" --yes
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/boss-push")" = 401
 
       - name: Desplegar boss-login
         env:
