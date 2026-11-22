@@ -37,6 +37,7 @@ jobs:
             cat supabase/migrations/20261121233500_boss_responsable_acarreo.sql
             cat supabase/migrations/20261122101500_boss_destinos_materiales.sql
             cat supabase/migrations/20261122102000_boss_disponibilidad_equipos.sql
+            cat supabase/migrations/20261122102500_boss_registro_unico_turno.sql
             cat <<'SQL'
           select set_config('boss.deploy_test_user', 'PruebaDeploy_' || substr(md5(random()::text), 1, 10), true);
           set local role service_role;
@@ -64,6 +65,23 @@ jobs:
             values (prueba, 'Admin', date '1900-01-01', 'Diurno', '43', 1, 20, 0.83, 'Prueba', 'Responsable de prueba');
             if not exists (select 1 from public.boss_acarreos where id = prueba and responsable = 'Responsable de prueba') then
               raise exception 'No se pudo comprobar el registro de Admin';
+            end if;
+            begin
+              insert into public.boss_acarreos
+                (id, registrado_por, fecha, turno, unidad, viajes, capacidad_m3, densidad, equipo)
+              values (prueba || '-duplicado', 'SupervisorPrueba', date '1900-01-01', 'Diurno', '43', 1, 20, 0.83, 'Prueba');
+              raise exception 'La base aceptó un total repetido';
+            exception when unique_violation then
+              null;
+            end;
+            update public.boss_acarreos
+            set viajes = 2, actualizado_por = 'Admin2', actualizado_en = now() where id = prueba;
+            if not exists (
+              select 1 from public.boss_acarreos_correcciones
+              where acarreo_id = prueba and corregido_por = 'Admin2'
+                and antes->>'viajes' = '1' and despues->>'viajes' = '2'
+            ) then
+              raise exception 'La corrección no quedó registrada';
             end if;
             raise exception using errcode = 'BM001', message = 'Retirar el registro temporal';
           exception when sqlstate 'BM001' then
