@@ -1,5 +1,5 @@
-const CACHE = 'bossmetal-v7';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx', './avisos.js?v=1', './nomina.js?v=vigilancia2', './excel-corporativo.js?v=2'];
+const CACHE = 'bossmetal-v8';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx', './avisos.js?v=1', './nomina.js?v=rotacion3', './excel-corporativo.js?v=2'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4', 'bossmetal-v5', 'bossmetal-v6'].map(name => caches.delete(name)))
+    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4', 'bossmetal-v5', 'bossmetal-v6', 'bossmetal-v7'].map(name => caches.delete(name)))
       .then(() => self.clients.claim())
   );
 });
