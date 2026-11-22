@@ -2,9 +2,6 @@ name: Deploy Supabase Functions
 
 on:
   workflow_dispatch:
-  push:
-    branches: [registro-admin-supabase]
-    paths: ['.github/workflows/deploy-supabase.yml']
 
 concurrency:
   group: boss-metal-supabase
