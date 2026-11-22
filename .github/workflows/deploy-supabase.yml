@@ -1,6 +1,9 @@
 name: Deploy Supabase Functions
 
 on:
+  push:
+    branches: [descuento-guardia-completa]
+    paths: ['.github/workflows/deploy-supabase.yml']
   workflow_dispatch:
 
 concurrency:
@@ -44,6 +47,7 @@ jobs:
             cat supabase/migrations/20261122140000_boss_nomina.sql
             cat supabase/migrations/20261122150000_boss_aviso_nomina.sql
             cat supabase/migrations/20261122170000_fijos_quincena.sql
+            cat supabase/migrations/20261122180000_descuento_guardias.sql
             cat <<'SQL'
           do $$
           declare
