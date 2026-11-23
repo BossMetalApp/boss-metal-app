@@ -137,16 +137,27 @@
     return cell;
   }
 
+  function balanceMetric(amount) {
+    const cell = metric(amount);
+    if (amount < 0) cell.className = 'balance-negativo';
+    if (amount > 0) cell.className = 'balance-positivo';
+    return cell;
+  }
+
   function render(rows, rate) {
     const table = el('filas');
     const opened = new Set([...table.querySelectorAll('button[aria-expanded="true"]')].map(button => button.dataset.key));
     table.replaceChildren();
-    let production = 0, expenses = 0;
+    let production = 0, expenses = 0, equipmentStarted = false;
     for (const [key, row] of rows) {
       production += row.monto;
       expenses += row.costo;
       const summary = table.insertRow();
       summary.className = key === 'general' ? 'balance-resumen balance-general' : 'balance-resumen';
+      if (row.equipo && !equipmentStarted) {
+        summary.classList.add('balance-equipos-inicio');
+        equipmentStarted = true;
+      }
       summary.setAttribute('role', 'row');
       const unit = summary.insertCell();
       unit.setAttribute('role', 'cell');
@@ -158,9 +169,7 @@
       unit.append(button);
       const value = metric(row.monto);
       if (row.acarreo) value.append(text('small', number.format(row.toneladas ?? 0) + ' t'));
-      const balance = metric(row.monto - row.costo);
-      if (row.monto < row.costo) balance.className = 'balance-negativo';
-      summary.append(value, metric(row.costo), balance);
+      summary.append(value, metric(row.costo), balanceMetric(row.monto - row.costo));
       const expanded = table.insertRow();
       expanded.className = 'balance-ampliado';
       expanded.setAttribute('role', 'row');
@@ -179,9 +188,7 @@
     const heading = text('th', 'Total de la operación');
     heading.scope = 'row';
     heading.setAttribute('role', 'rowheader');
-    const balance = metric(production - expenses);
-    if (production < expenses) balance.className = 'balance-negativo';
-    totals.replaceChildren(heading, metric(production), metric(expenses), balance);
+    totals.replaceChildren(heading, metric(production), metric(expenses), balanceMetric(production - expenses));
   }
 
   async function load(openEquipment) {

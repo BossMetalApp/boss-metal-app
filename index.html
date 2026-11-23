@@ -79,14 +79,30 @@ body.boss-authenticated #boss-login-screen{display:none}
 #gastos .gasto-mov-reposicion{background:#e5f5eb;color:#174733;border-color:#26704d;font-weight:700;margin:1em 0}
 #gastos .gasto-editar-reposicion{font-weight:400}
 #gastos .gasto-editar-reposicion button{margin-top:8px}
-#balance-produccion .balance-cuadro{table-layout:fixed;width:100%;font-size:.92rem}
+#balance-produccion .balance-cuadro{table-layout:fixed;width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem}
+#balance-produccion .balance-cuadro col:nth-child(1){width:28%}
+#balance-produccion .balance-cuadro col:nth-child(2){width:23%}
+#balance-produccion .balance-cuadro col:nth-child(3){width:22%}
+#balance-produccion .balance-cuadro col:nth-child(4){width:27%}
 #balance-produccion .balance-cuadro caption{padding:0 0 6px;text-align:right;color:#516373;font-size:.78rem}
 #balance-produccion .balance-cuadro :is(td,th){padding:8px 6px;white-space:normal;overflow-wrap:anywhere;vertical-align:middle}
-#balance-produccion .balance-cuadro :is(td,th):first-child{width:31%;text-align:left}
-#balance-produccion .balance-cuadro :is(td,th):not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+#balance-produccion .balance-cuadro :is(tbody,tfoot) :is(td,th):first-child{text-align:left}
+#balance-produccion .balance-cuadro :is(tbody,tfoot) :is(td,th):not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+#balance-produccion .balance-cuadro thead tr > th{
+  padding-block:10px;text-align:center;text-transform:uppercase;background:#163751
+}
+#balance-produccion .balance-cuadro thead th:first-child{border-top-left-radius:8px}
+#balance-produccion .balance-cuadro thead th:last-child{border-top-right-radius:8px}
+#balance-produccion .balance-cuadro .balance-resumen td:not(:first-child)>strong{white-space:nowrap}
+#balance-produccion .balance-cuadro tbody .balance-resumen:not(.balance-general) td:last-child{background:#f2f6f9}
+#balance-produccion .balance-cuadro .balance-equipos-inicio td{border-top:2px solid #cad9e4}
 #balance-produccion .balance-cuadro small{display:block;color:#516373}
-#balance-produccion .balance-cuadro .balance-general{background:#f2f6fa}
-#balance-produccion .balance-cuadro tfoot{background:#e6eef5;font-weight:700}
+#balance-produccion .balance-cuadro tbody .balance-general td{background:#eaf0f6}
+#balance-produccion .balance-cuadro tfoot :is(th,td){
+  background:#dce8f3;color:#17324a;font-weight:700;border-top:1px solid #c7d8e7
+}
+#balance-produccion .balance-cuadro tfoot th:first-child{border-bottom-left-radius:8px}
+#balance-produccion .balance-cuadro tfoot td:last-child{border-bottom-right-radius:8px}
 #balance-produccion .balance-cuadro .balance-unidad{
   display:flex;align-items:center;gap:5px;width:100%;min-height:40px;padding:0;
   background:transparent;border:0;color:inherit;text-align:left;font:inherit;font-weight:700;overflow-wrap:anywhere
@@ -95,13 +111,14 @@ body.boss-authenticated #boss-login-screen{display:none}
 #balance-produccion .balance-unidad[aria-expanded="true"]::before{content:'▾'}
 #balance-produccion .balance-detalle{padding:8px 12px;background:#f2f6fa;border-radius:8px}
 #balance-produccion .balance-detalle h4{margin:10px 0 4px}
-#balance-produccion .balance-negativo{color:#a42626}
+#balance-produccion .balance-cuadro .balance-positivo{color:#17634d}
+#balance-produccion .balance-cuadro .balance-negativo{color:#a42626}
 #balance-produccion #balance-form{margin-top:12px}
 @media(max-width:600px){
   #balance-produccion>.card{padding-inline:10px}
-  #balance-produccion .balance-cuadro{font-size:.78rem}
-  #balance-produccion .balance-cuadro thead th{font-size:.72rem}
-  #balance-produccion .balance-cuadro :is(td,th){padding:5px 3px}
+  #balance-produccion .balance-cuadro{font-size:clamp(.65rem,3.12vw,.81rem)}
+  #balance-produccion .balance-cuadro thead th{font-size:clamp(.60rem,2.9vw,.74rem)}
+  #balance-produccion .balance-cuadro :is(td,th){padding:5px 2px}
   #balance-produccion .balance-cuadro .balance-unidad{min-height:44px}
   #balance-produccion .balance-cuadro small{font-size:.69rem}
 }
@@ -170,6 +187,7 @@ body.boss-authenticated #boss-login-screen{display:none}
     <div id="balance-cuadro" hidden>
       <table class="balance-cuadro" role="table" aria-label="Producción, gastos y balance por unidad o equipo">
         <caption>Montos en USD</caption>
+        <colgroup><col><col><col><col></colgroup>
         <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader" aria-label="Unidad o equipo">Unidad</th><th scope="col" role="columnheader">Producción</th><th scope="col" role="columnheader">Gastos</th><th scope="col" role="columnheader">Balance</th></tr></thead>
         <tbody id="balance-filas" role="rowgroup"></tbody>
         <tfoot role="rowgroup"><tr id="balance-totales" class="balance-resumen" role="row"></tr></tfoot>
@@ -1363,4 +1381,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos11"></script><script src="./gastos.js?v=8"></script><script src="./balance.js?v=6"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos11"></script><script src="./gastos.js?v=8"></script><script src="./balance.js?v=7"></script><script src="./avisos.js?v=1"></script></body></html>
