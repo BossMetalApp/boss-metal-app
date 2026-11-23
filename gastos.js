@@ -27,8 +27,64 @@ function clearBalance(){
 function outstanding(){return (Math.round(balance.pagado*100)-Math.round(balance.repuesto*100))/100;}
 function movements(){
   const expenses=entries.filter(r=>r[5]==='Admin2').map(r=>({fecha:r[0],tipo:'Pagado por Admin2',detalle:r[1],monto:r[2]}));
-  const payments=balance.movimientos.map(r=>({fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto,esReposicion:true}));
+  const payments=balance.movimientos.map(r=>({id:r.id,fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto,esReposicion:true}));
   return expenses.concat(payments).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+function montoCorreccion(value){
+  const texto=value.trim();
+  return /^\d+(?:[.,]\d{1,2})?$/.test(texto)?Number(texto.replace(',','.')):NaN;
+}
+function editarReposicion(movimiento){
+  const panel=document.createElement('details');
+  const toggle=document.createElement('summary');
+  toggle.textContent='Corregir reposición';
+  const editor=document.createElement('form');
+  editor.className='gasto-editar-reposicion';
+  const etiquetaMonto=document.createElement('label'), monto=document.createElement('input');
+  etiquetaMonto.textContent='Monto correcto en USD';
+  monto.type='text';
+  monto.inputMode='decimal';
+  monto.required=true;
+  monto.value=String(movimiento.monto);
+  etiquetaMonto.append(monto);
+  const etiquetaReferencia=document.createElement('label'), referencia=document.createElement('input');
+  etiquetaReferencia.textContent='Referencia (opcional)';
+  referencia.maxLength=160;
+  referencia.value=movimiento.detalle;
+  etiquetaReferencia.append(referencia);
+  const guardar=document.createElement('button');
+  guardar.type='submit';
+  guardar.textContent='Guardar corrección';
+  const estado=document.createElement('small');
+  estado.setAttribute('role','status');
+  editor.append(etiquetaMonto,etiquetaReferencia,guardar,estado);
+  panel.append(toggle,editor);
+  editor.onsubmit=async event=>{
+    event.preventDefault();
+    const session=bossSession;
+    if(guardar.disabled||session?.usuario!=='Admin')return;
+    const importe=montoCorreccion(monto.value);
+    if(!(importe>0 && importe<1e12)){
+      estado.textContent='Escribe el monto sin separador de miles. Usa coma o punto para hasta dos decimales.';
+      monto.focus();
+      return;
+    }
+    estado.textContent='';
+    guardar.disabled=monto.disabled=referencia.disabled=true;
+    try{
+      await requestProduction(session,{
+        accion:'gastos_corregir_reposicion',id:movimiento.id,monto:importe,referencia:referencia.value.trim(),
+        montoAnterior:Number(movimiento.monto),referenciaAnterior:movimiento.detalle,
+      });
+      if(session!==bossSession)return;
+      if(await load())by('status').textContent='Reposición corregida. '+by('status').textContent;
+    }catch(error){
+      if(session===bossSession)estado.textContent=error.message;
+    }finally{
+      guardar.disabled=monto.disabled=referencia.disabled=false;
+    }
+  };
+  return panel;
 }
 function drawBalance(){
   const saldo=outstanding(), box=by('mov');
@@ -46,9 +102,12 @@ function drawBalance(){
   const moves=movements();
   if(!moves.length)box.textContent='Sin movimientos en este período.';
   for(const m of moves){
-    const line=document.createElement('p');
-    if(m.esReposicion)line.className='gasto-mov-reposicion';
+    const line=document.createElement(m.esReposicion?'div':'p');
     line.textContent=[m.fecha,m.tipo,m.detalle,fmt(m.monto)].filter(Boolean).join(' · ');
+    if(m.esReposicion){
+      line.className='gasto-mov-reposicion';
+      if(bossSession.usuario==='Admin'&&m.id)line.append(editarReposicion(m));
+    }
     box.append(line);
   }
   for(const r of entries.filter(row=>row[5]==='Por identificar')){
