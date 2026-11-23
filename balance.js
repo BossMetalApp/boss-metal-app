@@ -8,6 +8,9 @@
   const todayCaracas = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'America/Caracas'}).format(new Date());
   const normalize = value => value.trim().replace(/\s+/g, ' ').toLowerCase();
   const text = (tag, value) => Object.assign(document.createElement(tag), {textContent:value});
+  const generalVehicles = new Map([
+    ['x1','X1'], ['orinoco','Orinoco'], ['van transporte','Van transporte'],
+  ]);
   const form = el('form');
   let sequence = 0, attempt = null, saving = false;
 
@@ -38,15 +41,19 @@
       row.trabajos.push(item);
       row.monto += cents(item.monto);
     }
-    function assigned(destination) {
-      const name = window.bossGastos.normalizarDestino(destination ?? '').trim();
-      const normalized = normalize(name);
+    function assigned(name, normalized) {
       if (!normalized || normalized === 'general') return general;
       const unit = /^unidad\s+([a-z0-9-]+)(?:\s*[·•-]|$)/i.exec(name);
       const key = unit ? 'acarreo:' + unit[1] : 'destino:' + normalized;
       return equipment.get(normalized) ?? rows.get(key) ?? add(key, name, {acarreo:!!unit});
     }
-    for (const expense of data.gastos) assigned(expense.destino).gastos.push(expense);
+    for (const expense of data.gastos) {
+      const name = window.bossGastos.normalizarDestino(expense.destino ?? '').trim();
+      const normalized = normalize(name);
+      const vehicle = generalVehicles.get(normalized);
+      if (vehicle) general.gastos.push({...expense, vehiculo:vehicle});
+      else assigned(name, normalized).gastos.push(expense);
+    }
     let incomplete = false;
     for (const report of payroll) {
       for (const line of window.filasNominaParaGastos(report, day)) {
@@ -104,12 +111,22 @@
     root.append(text('h4', 'Gastos'));
     if (row.gastos.length) {
       const list = document.createElement('ul');
-      for (const expense of row.gastos) list.append(text('li', [dateLabel(expense.fecha), expense.partida, expense.concepto, money(cents(expense.monto))].filter(Boolean).join(' · ')));
+      for (const expense of row.gastos) list.append(text('li', [dateLabel(expense.fecha), expense.vehiculo, expense.partida, expense.concepto, money(cents(expense.monto))].filter(Boolean).join(' · ')));
       root.append(list);
     } else {
       root.append(text('p', 'Sin gastos en este período.'));
     }
     return root;
+  }
+
+  function metric(label, amount) {
+    const cell = document.createElement('td');
+    cell.setAttribute('role', 'cell');
+    const caption = text('span', label);
+    caption.className = 'balance-metrica';
+    caption.setAttribute('aria-hidden', 'true');
+    cell.append(caption, text('strong', money(amount)));
+    return cell;
   }
 
   function render(rows, rate) {
@@ -121,22 +138,26 @@
       production += row.monto;
       expenses += row.costo;
       const summary = table.insertRow();
+      summary.className = key === 'general' ? 'balance-resumen balance-general' : 'balance-resumen';
+      summary.setAttribute('role', 'row');
       const unit = summary.insertCell();
+      unit.setAttribute('role', 'cell');
       const button = text('button', row.nombre);
       button.type = 'button';
       button.className = 'balance-unidad';
       button.dataset.key = key;
       unit.append(button);
-      const value = summary.insertCell();
-      value.append(text('strong', money(row.monto)));
+      const value = metric('Producción', row.monto);
       if (row.acarreo) value.append(text('small', number.format(row.toneladas ?? 0) + ' t'));
-      summary.insertCell().textContent = money(row.costo);
-      const balance = summary.insertCell();
-      balance.textContent = money(row.monto - row.costo);
+      const balance = metric('Balance', row.monto - row.costo);
       if (row.monto < row.costo) balance.className = 'balance-negativo';
+      summary.append(value, metric('Gastos', row.costo), balance);
       const expanded = table.insertRow();
+      expanded.className = 'balance-ampliado';
+      expanded.setAttribute('role', 'row');
       const cell = expanded.insertCell();
       cell.colSpan = 4;
+      cell.setAttribute('role', 'cell');
       cell.append(detail(row, rate));
       expanded.hidden = !opened.has(key);
       button.setAttribute('aria-expanded', String(!expanded.hidden));
@@ -146,8 +167,12 @@
       };
     }
     const totals = el('totales');
-    totals.replaceChildren(...[production, expenses, production - expenses].map(value => text('td', money(value))));
-    totals.prepend(text('th', 'Total de la operación'));
+    const heading = text('th', 'Total de la operación');
+    heading.scope = 'row';
+    heading.setAttribute('role', 'rowheader');
+    const balance = metric('Balance', production - expenses);
+    if (production < expenses) balance.className = 'balance-negativo';
+    totals.replaceChildren(heading, metric('Producción', production), metric('Gastos', expenses), balance);
   }
 
   async function load(openEquipment) {
