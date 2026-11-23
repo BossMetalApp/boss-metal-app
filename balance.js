@@ -21,10 +21,10 @@
       return row;
     }
     const units = new Map([...DEFAULT_E, ...E].map(unit => [String(unit.id), unit.name]));
-    for (const [id, name] of units) add('acarreo:' + id, 'Unidad ' + id + ' · ' + name, {acarreo:true});
+    for (const [id, name] of units) add('acarreo:' + id, etiquetaUnidad(id,name), {acarreo:true});
     for (const item of data.acarreo) {
       const key = 'acarreo:' + item.unidad;
-      const row = rows.get(key) ?? add(key, 'Unidad ' + item.unidad + ' · ' + item.equipo, {acarreo:true});
+      const row = rows.get(key) ?? add(key, etiquetaUnidad(item.unidad,item.equipo), {acarreo:true});
       row.toneladas = Number(item.toneladas);
       row.viajes = Number(item.viajes);
       row.monto = cents(item.monto);
@@ -41,8 +41,8 @@
     }
     function assigned(name, normalized) {
       if (!normalized || normalized === 'general') return general;
-      const unit = /^unidad\s+([a-z0-9-]+)(?:\s*[·•-]|$)/i.exec(name);
-      const key = unit ? 'acarreo:' + unit[1] : 'destino:' + normalized;
+      const unit = idUnidadEnEtiqueta(name);
+      const key = unit ? 'acarreo:' + unit : 'destino:' + normalized;
       return equipment.get(normalized) ?? rows.get(key) ?? add(key, name, {acarreo:!!unit});
     }
     for (const expense of data.gastos) {
@@ -68,9 +68,10 @@
         for (const shift of line.rows) {
           if (!Number(shift.monto)) continue;
           const nombreEquipo = normalize(shift.equipo ?? '') || equipoHabitual;
-          const unidad = unidadChofer ? rows.get('acarreo:' + unidadChofer) : undefined;
+          const id = unidadChofer ?? idUnidadEnEtiqueta(shift.equipo);
+          const unidad = id ? rows.get('acarreo:' + id) : undefined;
           const destino = unidad ?? equipment.get(nombreEquipo) ?? rows.get('destino:' + nombreEquipo) ?? general;
-          destino.gastos.push({fecha:shift.fecha, concepto:line.w.nombre + ' · ' + shift.turno, monto:shift.monto, partida:'Nómina'});
+          destino.gastos.push({fecha:shift.fecha, concepto:nombrePuesto(line.w.nombre) + ' · ' + shift.turno, monto:shift.monto, partida:'Nómina'});
         }
       }
     }
@@ -158,7 +159,7 @@
       summary.setAttribute('role', 'row');
       const unit = summary.insertCell();
       unit.setAttribute('role', 'cell');
-      const button = text('button', row.acarreo ? row.nombre.replace(/^Unidad /, '') : row.nombre);
+      const button = text('button', row.nombre);
       button.setAttribute('aria-label', row.nombre);
       button.type = 'button';
       button.className = 'balance-unidad';

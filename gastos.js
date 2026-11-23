@@ -16,7 +16,7 @@ function vehiculo(destino){
   return vehiculosPorNombre.get(destino?.trim().replace(/\s+/g,' ').toLowerCase());
 }
 function normalizarDestino(destino){
-  return vehiculo(destino) ?? destino;
+  return vehiculo(destino) ?? normalizarEtiquetaUnidad(destino);
 }
 function partidaResumen(row){
   if(vehiculo(row[4]))return 'Vehículos';
@@ -255,7 +255,7 @@ async function load(){
   clearBalance();by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
   by('groups').replaceChildren();by('period').textContent='';by('total').textContent='…';
   const selector=by('destinos'), previous=selector.value;
-  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>normalizarDestino(e.nombre)),...vehiculos]);
+  const destinos=new Set(['General',...E.map(e=>etiquetaUnidad(e.id,e.name)),...availabilityExtra.map(e=>normalizarDestino(e.nombre)),...vehiculos]);
   selector.replaceChildren(...Array.from(destinos,n=>new Option(n,n)),new Option('Otro vehículo o equipo…','__otro'));
   if(previous && (destinos.has(previous)||previous==='__otro'))selector.value=previous;
   mostrarOtro();
@@ -276,7 +276,7 @@ async function load(){
       const day=mode==='Día'?date:null;
       for(const row of window.filasNominaParaGastos(report,day)){
         if(row.pending)incomplete=true;
-        if(row.pay)rows.push([day||report.desde,row.w.nombre+(day?'':' · '+report.desde+' al '+report.hasta),row.pay,'Nómina','']);
+        if(row.pay)rows.push([day||report.desde,nombrePuesto(row.w.nombre)+(day?'':' · '+report.desde+' al '+report.hasta),row.pay,'Nómina','']);
       }
     }
     if(seq!==version || session!==bossSession)return false;

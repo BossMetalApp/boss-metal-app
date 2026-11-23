@@ -3,7 +3,7 @@
   const money = value => new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).format(value);
   const text = (tag,value) => { const node=document.createElement(tag);node.textContent=value;return node; };
   const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
-  const detail = r => [r.fecha,r.turno,attendance(r),r.equipo,r.condicion === attendance(r) ? null : r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
+  const detail = r => [r.fecha,r.turno,attendance(r),normalizarEtiquetaUnidad(r.equipo),r.condicion === attendance(r) ? null : r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
   let selected=null, report=null, equipment=[], version=0, saving=false;
   function closeEditor() { selected=null;el('form').hidden=true;el('form').reset(); }
   window.resetNomina=()=>{
@@ -29,11 +29,11 @@
     const fixed=!!assigned && (!r?.equipo || r.equipo===assigned.nombre);
     el('equipo').hidden=fixed;
     document.querySelector('label[for="nom-equipo"]').hidden=fixed;
-    el('nombre').textContent=w.nombre+' · '+w.cargo+(w.cargo==='Vigilante'?' · Registra ambos turnos de la guardia de 24 h.':'');
+    el('nombre').textContent=nombrePuesto(w.nombre)+' · '+w.cargo+(w.cargo==='Vigilante'?' · Registra ambos turnos de la guardia de 24 h.':'');
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
-    options.value=attendance(r)||'';el('equipo').value=r?.equipo||assigned?.nombre||'';
+    options.value=attendance(r)||'';el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
     if(fixed && !r?.condicion) el('equipo').onchange();
     el('nota').value=r?.nota||'';fields();el('form').hidden=false;el('asistencia').focus();
@@ -52,7 +52,7 @@
       block.append(text('summary',group+' · '+members.filter(w=>w.registro).length+' de '+members.length));
       list.append(block);
       for(const w of members){
-      const button=text('button',w.nombre);button.type='button';
+      const button=text('button',nombrePuesto(w.nombre));button.type='button';
       button.append(text('span',w.cargo+' · '+(attendance(w.registro)||'Sin registrar')+(w.registro?' · '+w.registro.autor:'')));
       button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
       button.onclick=()=>edit(w);block.append(button);
@@ -139,7 +139,7 @@
       root.append(group);
       for(const r of members){
       const block=document.createElement('details');
-      block.append(heading(r.w.nombre,r.pay==null?r.pending:money(r.pay)));
+      block.append(heading(nombrePuesto(r.w.nombre),r.pay==null?r.pending:money(r.pay)));
       block.append(text('p',r.w.cargo+(r.fixed?(selectedDay()?' · Fijo prorrateado':' · Fijo quincenal'):' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
       if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.base)+' · Descuento por guardias '+money(r.deduction)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
@@ -162,7 +162,9 @@
         requestProduction(session,{accion:'disponibilidad_listar'}).catch(()=>({equipos:[]}))
       ]);
       if(seq!==version||session!==bossSession)return;
-      equipment=machines.equipos;
+      equipment=machines.equipos.map(item=>item.clave?.startsWith('acarreo:')
+        ? {...item,nombre:etiquetaUnidad(item.clave.slice(8),item.nombre)}
+        : item);
       const names=new Set([...availabilityExtra.map(x=>x.nombre),...equipment.map(x=>x.nombre)]);
       el('maquinas').replaceChildren(...[...names].map(name=>new Option(name,name)));
       renderPeople(day.personal);
@@ -221,8 +223,8 @@
     let cents=0;
     for(const r of summaryRows(report)){
       cents+=Math.round(Number(r.pay)*100);
-      summary.push([selectedDay()||report.desde,selectedDay()||report.hasta,r.w.nombre,r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending,r.deduction]);
-      for(const a of r.rows)entries.push([a.fecha,a.turno,r.w.nombre,r.w.cargo,attendance(a),a.equipo||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
+      summary.push([selectedDay()||report.desde,selectedDay()||report.hasta,nombrePuesto(r.w.nombre),r.w.cargo,r.day,r.night,r.absent,r.permits,r.pay??'',r.pending,r.deduction]);
+      for(const a of r.rows)entries.push([a.fecha,a.turno,nombrePuesto(r.w.nombre),r.w.cargo,attendance(a),normalizarEtiquetaUnidad(a.equipo)||'',a.condicion||'',a.equipo?(a.medio?'Medio':'Completo'):'',a.monto??'',a.nota,a.autor,a.actualizado_por]);
     }
     summary.push(['','','Total calculado','','','','','',cents/100,'']);
     download(xlsx([{name:selectedDay()?'Resumen diario':'Resumen quincenal',rows:summary},{name:'Asistencia',rows:entries}]),'BossMetal_Nomina_'+(selectedDay()||report.desde+'_'+report.hasta)+'.xlsx');

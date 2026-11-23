@@ -34,11 +34,12 @@ function corporateProductionExcel(records, from, to) {
   const equipment = new Map();
   for (const record of records) {
     const capacity = Number(record.capacidad_m3), density = Number(record.densidad);
-    const equipmentKey = JSON.stringify([record.unidad, record.equipo, capacity, density]);
-    equipment.set(equipmentKey, [record.equipo, record.unidad, capacity, density]);
+    const name = nombreUnidad(record.unidad, record.equipo);
+    const equipmentKey = JSON.stringify([record.unidad, name, capacity, density]);
+    equipment.set(equipmentKey, [name, record.unidad, capacity, density]);
     if (!dates.has(record.fecha)) dates.set(record.fecha, new Map());
     const units = dates.get(record.fecha);
-    if (!units.has(record.unidad)) units.set(record.unidad, {name: record.equipo, capacity, density, shifts: [[0,0,0],[0,0,0]]});
+    if (!units.has(record.unidad)) units.set(record.unidad, {name, capacity, density, shifts: [[0,0,0],[0,0,0]]});
     const shift = units.get(record.unidad).shifts[record.turno === 'Diurno' ? 0 : 1];
     const trips = Number(record.viajes);
     const volume = trips * capacity;
@@ -92,7 +93,7 @@ function corporateProductionExcel(records, from, to) {
       corporateFormula('IFERROR(A7/COUNTIFS('+interval+','+range('B')+',"TOTAL DIARIO",'+range('F')+',">0"),0)',total[2]?total[6]/dateKeys.filter(date=>[...dates.get(date).values()].some(unit=>unit.shifts.some(shift=>shift[0]>0))).length:0)],[5,5,5,9],64),
     corporateRow(10,['EQUIPO','TONELADAS (t)','VIAJES','% DE TONELADAS'],[7,7,7,4],42.75),
   ];
-  const knownNames = new Map([['43','MACK-R688'],['44','PEGASO'],['45','VOLQUETA IVECO'],['46','MAZPARRO']]);
+  const knownNames = new Map(nombresUnidades);
   const unitIds = [...new Set([...knownNames.keys(), ...unitsById.keys()])];
   unitIds.forEach((id,index)=>{
     const row = 11+index;
