@@ -27,12 +27,18 @@ function clearBalance(){
 function outstanding(){return (Math.round(balance.pagado*100)-Math.round(balance.repuesto*100))/100;}
 function movements(){
   const expenses=entries.filter(r=>r[5]==='Admin2').map(r=>({fecha:r[0],tipo:'Pagado por Admin2',detalle:r[1],monto:r[2]}));
-  const payments=balance.movimientos.map(r=>({fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto}));
+  const payments=balance.movimientos.map(r=>({fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto,esReposicion:true}));
   return expenses.concat(payments).sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
 function drawBalance(){
   const saldo=outstanding(), box=by('mov');
-  by('saldo').textContent='Pagado por Admin2 · '+fmt(balance.pagado)+' | Repuesto · '+fmt(balance.repuesto)+' | Pendiente acumulado · '+fmt(saldo)+(balance.pendientes?' · '+balance.pendientes+' gastos por identificar en total':'');
+  const pendiente=document.createElement('strong');
+  pendiente.className='gasto-saldo-pendiente';
+  if(saldo>0)pendiente.classList.add('gasto-saldo-por-reponer');
+  pendiente.textContent='Pendiente por reponer a Admin 2 · '+fmt(saldo);
+  const totales=document.createElement('span');
+  totales.textContent='Pagado por Admin2 · '+fmt(balance.pagado)+' | Repuesto · '+fmt(balance.repuesto)+(balance.pendientes?' · '+balance.pendientes+' gastos por identificar en total':'');
+  by('saldo').replaceChildren(pendiente,totales);
   by('reponer').hidden=bossSession.usuario!=='Admin' || saldo<=0;
   const f=by('pago').elements;
   if(!f.dia.value)f.dia.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
@@ -40,7 +46,10 @@ function drawBalance(){
   const moves=movements();
   if(!moves.length)box.textContent='Sin movimientos en este período.';
   for(const m of moves){
-    const line=document.createElement('p');line.textContent=[m.fecha,m.tipo,m.detalle,fmt(m.monto)].filter(Boolean).join(' · ');box.append(line);
+    const line=document.createElement('p');
+    if(m.esReposicion)line.className='gasto-mov-reposicion';
+    line.textContent=[m.fecha,m.tipo,m.detalle,fmt(m.monto)].filter(Boolean).join(' · ');
+    box.append(line);
   }
   for(const r of entries.filter(row=>row[5]==='Por identificar')){
     const line=document.createElement('p'), select=document.createElement('select'), btn=document.createElement('button');
