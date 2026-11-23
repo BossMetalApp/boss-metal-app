@@ -87,11 +87,15 @@ function draw(){
   }
   const equipment=section('Por unidad o equipo');
   const assigned=rows.filter(row=>row[4] && row[4]!=='General' && !vehiculo(row[4]));
-  for(const unit of new Set(assigned.map(row=>row[4]))){
+  const units=new Set([
+    ...DEFAULT_E.map(unit=>etiquetaUnidad(unit.id,unit.name)),
+    ...availabilityExtra.map(item=>item.nombre),
+    ...assigned.map(row=>row[4]),
+  ]);
+  for(const unit of units){
     const items=assigned.filter(row=>row[4]===unit);
     detail(group(equipment,unit,items),items);
   }
-  if(!assigned.length)equipment.append('Sin gastos asignados.');
   const general=rows.filter(row=>row[4]==='General');
   detail(group(section('Gastos generales'),'General',general),general);
 }
