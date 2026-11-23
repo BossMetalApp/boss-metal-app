@@ -64,10 +64,15 @@
           });
           continue;
         }
+        const puesto = normalize(line.w.nombre);
+        const unidadChofer = line.w.cargo === 'Chofer' ? /^chofer unidad ([a-z0-9-]+)$/.exec(puesto)?.[1] : undefined;
+        const equipoHabitual = line.w.cargo === 'Operador' && puesto.startsWith('operador ') ? puesto.slice(9) : '';
         for (const shift of line.rows) {
           if (!Number(shift.monto)) continue;
-          const row = equipment.get(normalize(shift.equipo ?? '')) ?? general;
-          row.gastos.push({fecha:shift.fecha, concepto:line.w.nombre + ' · ' + shift.turno, monto:shift.monto, partida:'Nómina'});
+          const nombreEquipo = normalize(shift.equipo ?? '') || equipoHabitual;
+          const unidad = unidadChofer ? rows.get('acarreo:' + unidadChofer) : undefined;
+          const destino = unidad ?? equipment.get(nombreEquipo) ?? rows.get('destino:' + nombreEquipo) ?? general;
+          destino.gastos.push({fecha:shift.fecha, concepto:line.w.nombre + ' · ' + shift.turno, monto:shift.monto, partida:'Nómina'});
         }
       }
     }
