@@ -15,6 +15,7 @@ function bounds(date,mode){
   if(mode==='Mensual')return [prefix+'01',prefix+last];
   return day<=15?[prefix+'01',prefix+'15']:[prefix+'16',prefix+last];
 }
+window.bossGastos = {periodo:bounds, normalizarDestino};
 function draw(){const date=by('date').value;if(!date)return;const [start,end]=bounds(date,document.querySelector('input[name="gasto-periodo"]:checked').value),rows=entries.filter(r=>r[0]>=start&&r[0]<=end),sum=rs=>rs.reduce((s,r)=>s+Math.round(r[2]*100),0)/100,display=d=>d.split('-').reverse().join('/');by('period').textContent=start===end?display(start):display(start)+' al '+display(end);by('total').textContent=fmt(sum(rows));const root=by('groups');root.replaceChildren();
 function section(name){const s=document.createElement('div');s.className='card';const h=document.createElement('h2');h.textContent=name;s.append(h);root.append(s);return s}
 function group(parent,label,items){const d=document.createElement('details'),h=document.createElement('summary'),b=document.createElement('b');h.append(label);b.textContent=fmt(sum(items));h.append(b);d.append(h);parent.append(d);return d}
