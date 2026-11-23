@@ -4,10 +4,25 @@ const fmt=n=>new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).fo
 let entries=[],version=0,pending=null,saving=false;
 let balance=null, paymentAttempt=null;
 const form=by('form');
-function normalizarDestino(destino){
-  const nombre=destino?.trim().replace(/\s+/g,' ').toLowerCase();
-  return nombre==='van trasporte'||nombre==='van transporte'?'Van transporte':destino;
+const vehiculos=['X1','Van transporte','Orinoco','Mitsubishi L200'];
+const vehiculosPorNombre=new Map(vehiculos.map(nombre=>[nombre.toLowerCase(),nombre]));
+vehiculosPorNombre.set('van trasporte','Van transporte');
+for(const alias of ['l200','l-200','mitsubishi l-200','mitsubishi l 200'])
+  vehiculosPorNombre.set(alias,'Mitsubishi L200');
+const consumibles=['Aceites','Mangueras','Filtros'];
+const partidas=['Nómina','Repuestos','Consumibles','Oficina','Comida','Operacionales','Vehículos'];
+
+function vehiculo(destino){
+  return vehiculosPorNombre.get(destino?.trim().replace(/\s+/g,' ').toLowerCase());
 }
+function normalizarDestino(destino){
+  return vehiculo(destino) ?? destino;
+}
+function partidaResumen(row){
+  if(vehiculo(row[4]))return 'Vehículos';
+  return consumibles.includes(row[3])?'Consumibles':row[3];
+}
+const montoTotal=rows=>rows.reduce((sum,row)=>sum+Math.round(row[2]*100),0)/100;
 function bounds(date,mode){
   if(mode==='Día')return [date,date];
   const [year,month,day]=date.split('-').map(Number);
@@ -15,13 +30,71 @@ function bounds(date,mode){
   if(mode==='Mensual')return [prefix+'01',prefix+last];
   return day<=15?[prefix+'01',prefix+'15']:[prefix+'16',prefix+last];
 }
-window.bossGastos = {periodo:bounds, normalizarDestino};
-function draw(){const date=by('date').value;if(!date)return;const [start,end]=bounds(date,document.querySelector('input[name="gasto-periodo"]:checked').value),rows=entries.filter(r=>r[0]>=start&&r[0]<=end),sum=rs=>rs.reduce((s,r)=>s+Math.round(r[2]*100),0)/100,display=d=>d.split('-').reverse().join('/');by('period').textContent=start===end?display(start):display(start)+' al '+display(end);by('total').textContent=fmt(sum(rows));const root=by('groups');root.replaceChildren();
-function section(name){const s=document.createElement('div');s.className='card';const h=document.createElement('h2');h.textContent=name;s.append(h);root.append(s);return s}
-function group(parent,label,items){const d=document.createElement('details'),h=document.createElement('summary'),b=document.createElement('b');h.append(label);b.textContent=fmt(sum(items));h.append(b);d.append(h);parent.append(d);return d}
-function detail(parent,items){for(const [day,concept,value,,unit,payer] of items){const line=document.createElement('small');line.textContent=[display(day),concept,unit,payer,fmt(value)].filter(Boolean).join(' · ');parent.append(line)}if(!items.length)parent.append('Sin gastos en este período.')}
-const cat=section('Resumen por partida');for(const name of ['Nómina','Repuestos','Consumibles','Oficina','Comida','Operacionales']){const cons=['Aceites','Mangueras','Filtros'],items=rows.filter(r=>name==='Consumibles'?cons.includes(r[3]):r[3]===name),g=group(cat,name,items);if(name==='Consumibles'){for(const c of cons){const part=items.filter(r=>r[3]===c);detail(group(g,c,part),part)}}else detail(g,items)}
-const eq=section('Por unidad o equipo'),assigned=rows.filter(r=>r[4] && r[4]!=='General');for(const u of new Set(assigned.map(r=>r[4]))){const items=assigned.filter(r=>r[4]===u);detail(group(eq,u,items),items)}if(!assigned.length)eq.append('Sin gastos asignados.');const general=rows.filter(r=>r[4]==='General');detail(group(section('Gastos generales'),'General',general),general)}
+window.bossGastos = {periodo:bounds, normalizarDestino, vehiculo};
+function draw(){
+  const date=by('date').value;
+  if(!date)return;
+  const [start,end]=bounds(date,document.querySelector('input[name="gasto-periodo"]:checked').value);
+  const rows=entries.filter(row=>row[0]>=start&&row[0]<=end);
+  const display=date=>date.split('-').reverse().join('/');
+  by('period').textContent=start===end?display(start):display(start)+' al '+display(end);
+  by('total').textContent=fmt(montoTotal(rows));
+  const root=by('groups');
+  root.replaceChildren();
+
+  function section(name){
+    const card=document.createElement('div'), heading=document.createElement('h2');
+    card.className='card';
+    heading.textContent=name;
+    card.append(heading);
+    root.append(card);
+    return card;
+  }
+  function group(parent,label,items){
+    const group=document.createElement('details'), title=document.createElement('summary'), amount=document.createElement('b');
+    amount.textContent=fmt(montoTotal(items));
+    title.append(label,amount);
+    group.append(title);
+    parent.append(group);
+    return group;
+  }
+  function detail(parent,items,showCategory=false){
+    for(const [day,concept,value,category,unit,payer] of items){
+      const line=document.createElement('small');
+      line.textContent=[display(day),concept,showCategory?category:unit,payer,fmt(value)].filter(Boolean).join(' · ');
+      parent.append(line);
+    }
+    if(!items.length)parent.append('Sin gastos en este período.');
+  }
+  const categories=section('Resumen por partida');
+  for(const name of partidas){
+    const items=rows.filter(row=>partidaResumen(row)===name);
+    const category=group(categories,name,items);
+    if(name==='Vehículos'){
+      category.classList.add('gasto-vehiculos');
+      for(const name of vehiculos){
+        const part=items.filter(row=>vehiculo(row[4])===name);
+        detail(group(category,name,part),part,true);
+      }
+    }else if(name==='Consumibles'){
+      for(const name of consumibles){
+        const part=items.filter(row=>row[3]===name);
+        detail(group(category,name,part),part);
+      }
+    }else{
+      detail(category,items);
+    }
+  }
+  const equipment=section('Por unidad o equipo');
+  const assigned=rows.filter(row=>row[4] && row[4]!=='General' && !vehiculo(row[4]));
+  for(const unit of new Set(assigned.map(row=>row[4]))){
+    const items=assigned.filter(row=>row[4]===unit);
+    detail(group(equipment,unit,items),items);
+  }
+  if(!assigned.length)equipment.append('Sin gastos asignados.');
+  const general=rows.filter(row=>row[4]==='General');
+  detail(group(section('Gastos generales'),'General',general),general);
+}
 function clearBalance(){
   balance=null;by('saldo').textContent='';by('mov').replaceChildren();by('reponer').hidden=true;
 }
@@ -145,19 +218,19 @@ function exportExpenses(){
   const mode=document.querySelector('input[name="gasto-periodo"]:checked').value;
   const [start,end]=bounds(date.value,mode);
   const rows=entries.filter(([day])=>day>=start&&day<=end).sort((a,b)=>a[0].localeCompare(b[0]));
-  const consumables=['Aceites','Mangueras','Filtros'];
-  const category=item=>consumables.includes(item[3])?'Consumibles':item[3];
-  const amount=items=>items.reduce((sum,item)=>sum+Math.round(item[2]*100),0)/100;
   const summary=[['Partida','Monto (USD)','Desde','Hasta']];
-  for(const name of ['Nómina','Repuestos','Consumibles','Oficina','Comida','Operacionales'])
-    summary.push([name,amount(rows.filter(row=>category(row)===name)),start,end]);
-  summary.push(['Total del período',amount(rows),start,end]);
-  const detail=[['Fecha','Partida','Tipo de consumible','Concepto','Unidad o destino','Monto (USD)','Pagador']];
-  for(const row of rows)detail.push([row[0],category(row),consumables.includes(row[3])?row[3]:'',row[1],row[4]||'Nómina',row[2],row[5]||'']);
+  for(const name of partidas)
+    summary.push([name,montoTotal(rows.filter(row=>partidaResumen(row)===name)),start,end]);
+  summary.push(['Total del período',montoTotal(rows),start,end]);
+  const detail=[['Fecha','Partida','Tipo de consumible','Concepto','Unidad o destino','Monto (USD)','Pagador','Subpartida','Partida registrada']];
+  for(const row of rows){
+    const consumable=consumibles.includes(row[3])?row[3]:'';
+    detail.push([row[0],partidaResumen(row),consumable,row[1],row[4]||'Nómina',row[2],row[5]||'',vehiculo(row[4])||consumable,row[3]]);
+  }
   const destinations=[['Unidad o destino','Monto (USD)']];
   for(const name of new Set(rows.map(r=>r[4]||'Nómina'))){
     const items=rows.filter(row=>(row[4]||'Nómina')===name);
-    if(items.length)destinations.push([name,amount(items)]);
+    if(items.length)destinations.push([name,montoTotal(items)]);
   }
   const ledger=[['Concepto acumulado','USD'],['Pagado por Admin2',balance.pagado],['Repuesto por Admin',balance.repuesto],['Pendiente',outstanding()],[],['Fecha','Movimiento del período','Referencia o concepto','Monto (USD)']];
   for(const m of movements())ledger.push([m.fecha,m.tipo,m.detalle,m.monto]);
@@ -182,7 +255,7 @@ async function load(){
   clearBalance();by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
   by('groups').replaceChildren();by('period').textContent='';by('total').textContent='…';
   const selector=by('destinos'), previous=selector.value;
-  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>normalizarDestino(e.nombre))]);
+  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>normalizarDestino(e.nombre)),...vehiculos]);
   selector.replaceChildren(...Array.from(destinos,n=>new Option(n,n)),new Option('Otro vehículo o equipo…','__otro'));
   if(previous && (destinos.has(previous)||previous==='__otro'))selector.value=previous;
   mostrarOtro();

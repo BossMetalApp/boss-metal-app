@@ -9,9 +9,6 @@
   const todayCaracas = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'America/Caracas'}).format(new Date());
   const normalize = value => value.trim().replace(/\s+/g, ' ').toLowerCase();
   const text = (tag, value) => Object.assign(document.createElement(tag), {textContent:value});
-  const generalVehicles = new Map([
-    ['x1','X1'], ['orinoco','Orinoco'], ['van transporte','Van transporte'],
-  ]);
   const form = el('form');
   let sequence = 0, attempt = null, saving = false;
 
@@ -51,7 +48,7 @@
     for (const expense of data.gastos) {
       const name = window.bossGastos.normalizarDestino(expense.destino ?? '').trim();
       const normalized = normalize(name);
-      const vehicle = generalVehicles.get(normalized);
+      const vehicle = window.bossGastos.vehiculo(name);
       if (vehicle) general.gastos.push({...expense, vehiculo:vehicle});
       else assigned(name, normalized).gastos.push(expense);
     }
