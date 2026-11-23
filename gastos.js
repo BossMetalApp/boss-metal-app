@@ -4,6 +4,10 @@ const fmt=n=>new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).fo
 let entries=[],version=0,pending=null,saving=false;
 let balance=null, paymentAttempt=null;
 const form=by('form');
+function normalizarDestino(destino){
+  const nombre=destino?.trim().replace(/\s+/g,' ').toLowerCase();
+  return nombre==='van trasporte'||nombre==='van transporte'?'Van transporte':destino;
+}
 function bounds(date,mode){
   if(mode==='Día')return [date,date];
   const [year,month,day]=date.split('-').map(Number);
@@ -109,7 +113,7 @@ async function load(){
   clearBalance();by('exportar').disabled=true;by('status').textContent='Consultando gastos y nómina…';
   by('groups').replaceChildren();by('period').textContent='';by('total').textContent='…';
   const selector=by('destinos'), previous=selector.value;
-  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>e.nombre)]);
+  const destinos=new Set(['General',...E.map(e=>'Unidad '+e.id+' · '+e.name),...availabilityExtra.map(e=>normalizarDestino(e.nombre))]);
   selector.replaceChildren(...Array.from(destinos,n=>new Option(n,n)),new Option('Otro vehículo o equipo…','__otro'));
   if(previous && (destinos.has(previous)||previous==='__otro'))selector.value=previous;
   mostrarOtro();
@@ -121,7 +125,7 @@ async function load(){
     const rows=[];let offset=0;
     for(;;){
       const {gastos}=await requestProduction(session,{accion:'gastos_listar',desde,hasta,offset});
-      for(const g of gastos)rows.push([g.fecha,g.concepto,Number(g.monto),g.partida,g.destino,g.pagador||'Por identificar',g.id]);
+      for(const g of gastos)rows.push([g.fecha,g.concepto,Number(g.monto),g.partida,normalizarDestino(g.destino),g.pagador||'Por identificar',g.id]);
       if(gastos.length<500)break;
       offset+=gastos.length;
     }
@@ -151,7 +155,7 @@ by('cancel').onclick=()=>{if(!saving){form.reset();form.hidden=true;pending=null
 form.onsubmit=async event=>{
   event.preventDefault();if(saving || !isBossAdmin(bossSession))return;
   const session=bossSession,f=form.elements;
-  const data={pagador:f.pagador.value,fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:(f.unit.value==='__otro'?f.otro.value:f.unit.value).trim()};
+  const data={pagador:f.pagador.value,fecha:f.day.value,concepto:f.concept.value.trim(),monto:Number(f.amount.value),partida:f.cat.value,destino:normalizarDestino((f.unit.value==='__otro'?f.otro.value:f.unit.value).trim())};
   const key=JSON.stringify(data);
   if(!pending || key!==pending.key)pending={key,id:crypto.randomUUID()};
   saving=true;const controls=[...form.elements];controls.forEach(c=>c.disabled=true);
