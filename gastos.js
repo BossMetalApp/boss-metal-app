@@ -171,7 +171,7 @@ window.resetGastos=()=>{
   clearBalance();by('pago').reset();by('reponer').open=false;paymentAttempt=null;
   version++;entries=[];pending=null;form.reset();form.hidden=true;
   by('groups').replaceChildren();by('total').textContent='';by('period').textContent='';
-  by('status').textContent='';by('date').value='';$('gastos-tab').hidden=true;
+  by('status').textContent='';by('date').value='';by('mensual').checked=true;$('gastos-tab').hidden=true;
 };
 async function load(){
   const session=bossSession,seq=++version;
@@ -211,7 +211,11 @@ async function load(){
     by('exportar').disabled=false;return true;
   }catch(error){if(seq===version)by('status').textContent=error.message;return false;}
 }
-window.abrirGastos=load;
+window.abrirGastos=()=>{
+  by('mensual').checked=true;
+  return load();
+};
+window.actualizarGastos=load;
 by('date').onchange=by('mode').onchange=load;
 function mostrarOtro(){
   const otro=form.elements.unit.value==='__otro';

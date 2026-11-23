@@ -254,7 +254,11 @@
     }
   };
 
-  window.abrirBalanceProduccion = () => load();
+  window.abrirBalanceProduccion = () => {
+    el('modo').value = 'Mensual';
+    return load();
+  };
+  window.actualizarBalanceProduccion = () => load();
   window.resetBalanceProduccion = () => {
     sequence++;
     attempt = null;
@@ -262,7 +266,7 @@
     form.hidden = true;
     el('form-estado').textContent = '';
     el('fecha').value = '';
-    el('modo').value = 'Quincena';
+    el('modo').value = 'Mensual';
     el('tab').hidden = true;
     el('filas').replaceChildren();
     el('totales').replaceChildren();
