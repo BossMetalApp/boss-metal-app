@@ -2,6 +2,7 @@
   const el = id => document.getElementById('balance-' + id);
   const currency = new Intl.NumberFormat('es-VE', {style:'currency', currency:'USD'});
   const number = new Intl.NumberFormat('es-VE', {maximumFractionDigits:2});
+  const tableAmount = new Intl.NumberFormat('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2});
   const cents = value => Math.round(Number(value) * 100);
   const money = value => currency.format(value / 100);
   const dateLabel = date => date.split('-').reverse().join('/');
@@ -16,7 +17,7 @@
 
   function buildRows(data, payroll, day) {
     const rows = new Map();
-    const general = {nombre:'Gastos generales', gastos:[], monto:0};
+    const general = {nombre:'Gastos generales', gastos:[], monto:0, general:true};
     function add(key, nombre, extra = {}) {
       const row = {nombre, gastos:[], monto:0, ...extra};
       rows.set(key, row);
@@ -113,24 +114,26 @@
         root.append(list);
       }
     }
-    root.append(text('h4', 'Gastos'));
-    if (row.gastos.length) {
-      const list = document.createElement('ul');
-      for (const expense of row.gastos) list.append(text('li', [dateLabel(expense.fecha), expense.vehiculo, expense.partida, expense.concepto, money(cents(expense.monto))].filter(Boolean).join(' · ')));
-      root.append(list);
-    } else {
-      root.append(text('p', 'Sin gastos en este período.'));
+    const payroll = [], other = [];
+    for (const expense of row.gastos) {
+      const group = ['Nómina', 'Nómina fija'].includes(expense.partida) ? payroll : other;
+      group.push(expense);
     }
+    for (const [label, expenses] of [[row.general ? 'Nómina' : 'Nómina directa', payroll], ['Otros gastos', other]]) {
+      if (!expenses.length) continue;
+      const subtotal = expenses.reduce((sum, expense) => sum + cents(expense.monto), 0);
+      root.append(text('h4', label + ' · ' + money(subtotal)));
+      const list = document.createElement('ul');
+      for (const expense of expenses) list.append(text('li', [dateLabel(expense.fecha), expense.vehiculo, expense.partida, expense.concepto, money(cents(expense.monto))].filter(Boolean).join(' · ')));
+      root.append(list);
+    }
+    if (!row.gastos.length) root.append(text('p', 'Sin gastos en este período.'));
     return root;
   }
 
-  function metric(label, amount) {
+  function metric(amount) {
     const cell = document.createElement('td');
-    cell.setAttribute('role', 'cell');
-    const caption = text('span', label);
-    caption.className = 'balance-metrica';
-    caption.setAttribute('aria-hidden', 'true');
-    cell.append(caption, text('strong', money(amount)));
+    cell.append(text('strong', tableAmount.format(amount / 100)));
     return cell;
   }
 
@@ -147,16 +150,17 @@
       summary.setAttribute('role', 'row');
       const unit = summary.insertCell();
       unit.setAttribute('role', 'cell');
-      const button = text('button', row.nombre);
+      const button = text('button', row.acarreo ? row.nombre.replace(/^Unidad /, '') : row.nombre);
+      button.setAttribute('aria-label', row.nombre);
       button.type = 'button';
       button.className = 'balance-unidad';
       button.dataset.key = key;
       unit.append(button);
-      const value = metric('Producción', row.monto);
+      const value = metric(row.monto);
       if (row.acarreo) value.append(text('small', number.format(row.toneladas ?? 0) + ' t'));
-      const balance = metric('Balance', row.monto - row.costo);
+      const balance = metric(row.monto - row.costo);
       if (row.monto < row.costo) balance.className = 'balance-negativo';
-      summary.append(value, metric('Gastos', row.costo), balance);
+      summary.append(value, metric(row.costo), balance);
       const expanded = table.insertRow();
       expanded.className = 'balance-ampliado';
       expanded.setAttribute('role', 'row');
@@ -175,9 +179,9 @@
     const heading = text('th', 'Total de la operación');
     heading.scope = 'row';
     heading.setAttribute('role', 'rowheader');
-    const balance = metric('Balance', production - expenses);
+    const balance = metric(production - expenses);
     if (production < expenses) balance.className = 'balance-negativo';
-    totals.replaceChildren(heading, metric('Producción', production), metric('Gastos', expenses), balance);
+    totals.replaceChildren(heading, metric(production), metric(expenses), balance);
   }
 
   async function load(openEquipment) {
