@@ -133,7 +133,7 @@
 
   function metric(amount) {
     const cell = document.createElement('td');
-    cell.append(text('strong', tableAmount.format(amount / 100)));
+    cell.append(text('strong', '$ ' + tableAmount.format(amount / 100)));
     return cell;
   }
 
