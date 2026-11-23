@@ -138,6 +138,34 @@ Deno.serve(async (req) => {
       if(error)throw error;
       return reply({ok:true,gastos:data});
     }
+    if (["balance_produccion","balance_registrar_trabajo"].includes(body?.accion)) {
+      if (account.usuario !== "Admin") return reply({ok:false,mensaje:"Solo Admin puede consultar Producción y balance."},403);
+      etapa = "balance_produccion";
+      if (body.accion === "balance_registrar_trabajo") {
+        const {id,equipo,fecha,monto,concepto}=body;
+        if (!validId(id) || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id) ||
+            !["equipo:d8r","equipo:hl770","equipo:jumbo"].includes(equipo) || !validDate(fecha) ||
+            typeof monto!=="number" || !(monto>0 && monto<1e12) || Number(monto.toFixed(2))!==monto ||
+            typeof concepto!=="string" || concepto.length>200)
+          return reply({ok:false,mensaje:"Revisa el equipo, la fecha, el monto y el concepto."},400);
+        const row={id,equipo,fecha,monto,concepto:concepto.trim()};
+        const {error}=await db.from("boss_produccion_equipos").insert(row);
+        if (error?.code==="23505") {
+          const {data,error:readError}=await db.from("boss_produccion_equipos").select("id,equipo,fecha,monto,concepto").eq("id",id).single();
+          if (readError) throw readError;
+          if (Object.entries(row).some(([key,value])=>data[key]!==value))
+            return reply({ok:false,mensaje:"Este trabajo ya se guardó con otros datos."},409);
+        } else if (error) throw error;
+        return reply({ok:true});
+      }
+      const {desde,hasta}=body;
+      if (!validDate(desde) || !validDate(hasta) || desde>hasta || desde.slice(0,7)!==hasta.slice(0,7))
+        return reply({ok:false,mensaje:"Revisa el período de producción."},400);
+      const {data,error}=await db.rpc("boss_balance_produccion",{p_desde:desde,p_hasta:hasta});
+      if (error) throw error;
+      return reply({ok:true,produccion:data});
+    }
+
     if (typeof body?.accion === "string" && body.accion.startsWith("nomina_")) {
       etapa = "nomina";
       if (!validDate(body.fecha)) return reply({ok:false,mensaje:"Revisa la fecha"},400);
