@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
-    if (["gastos_guardar","gastos_listar","gastos_identificar","gastos_reponer","gastos_saldo"].includes(body?.accion)) {
+    if (["gastos_guardar","gastos_listar","gastos_identificar","gastos_reponer","gastos_corregir_reposicion","gastos_saldo"].includes(body?.accion)) {
       if (!admin) return reply({ok:false,mensaje:"Solo Administración puede acceder a gastos."},403);
       etapa = "gastos";
       if (body.accion === "gastos_identificar") {
@@ -86,6 +86,24 @@ Deno.serve(async (req) => {
         const {error}=await db.rpc("boss_reponer",{p_id:body.id,p_fecha:body.fecha,p_monto:body.monto,p_referencia:body.referencia.trim(),p_actor:account.usuario});
         if(error?.code==="22023")return reply({ok:false,mensaje:error.message},400);
         if(error)throw error;
+        return reply({ok:true});
+      }
+      if (body.accion === "gastos_corregir_reposicion") {
+        if (account.usuario !== "Admin") return reply({ok:false,mensaje:"Solo Admin corrige reposiciones."},403);
+        const {id,monto,referencia,montoAnterior,referenciaAnterior}=body;
+        const importeValido=(n: unknown): n is number =>
+          typeof n==="number" && n>0 && n<1e12 && Number(n.toFixed(2))===n;
+        if (!validId(id) || !importeValido(monto) || !importeValido(montoAnterior) ||
+          typeof referencia!=="string" || referencia.length>160 ||
+          typeof referenciaAnterior!=="string" || referenciaAnterior.length>160)
+          return reply({ok:false,mensaje:"Revisa el monto y la referencia."},400);
+        const {error}=await db.rpc("boss_corregir_reposicion",{
+          p_id:id,p_monto:monto,p_referencia:referencia.trim(),
+          p_monto_anterior:montoAnterior,p_referencia_anterior:referenciaAnterior,p_actor:account.usuario,
+        });
+        if (error?.code==="22023") return reply({ok:false,mensaje:error.message},400);
+        if (error?.code==="40001") return reply({ok:false,mensaje:error.message},409);
+        if (error) throw error;
         return reply({ok:true});
       }
       if (body.accion === "gastos_guardar") {
