@@ -6,6 +6,7 @@ on:
       - 'supabase/migrations/20261122230000_gastos.sql'
       - 'supabase/migrations/20261122233000_reposiciones.sql'
       - 'supabase/migrations/20261123190000_balance_produccion.sql'
+      - 'supabase/functions/boss-acarreos/index.ts'
   workflow_dispatch:
 concurrency:
   group: boss-metal-supabase
