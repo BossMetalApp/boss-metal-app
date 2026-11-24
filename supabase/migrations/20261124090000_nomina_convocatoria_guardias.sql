@@ -1,6 +1,6 @@
 alter table public.boss_nomina_asistencia
   drop constraint if exists boss_nomina_asistencia_estado_check,
-  add constraint boss_nomina_asistencia_estado_check check (estado in ('Trabajó','Faltó','Permiso','No convocado'));
+  add constraint boss_nomina_asistencia_estado_check check (estado in ('Trabajó','Faltó','Permiso','No convocado','De descanso'));
 
 create or replace function public.boss_nomina(p_actor text,p jsonb) returns jsonb
 language plpgsql set search_path=pg_catalog,public as $$
@@ -49,7 +49,9 @@ begin
  return jsonb_build_object('personal',personal);
  elsif accion='nomina_guardia' then
  if vigilante_asignado is null or not exists (
-   select 1 from boss_nomina_personal where id=persona_id and desde<=f and cargo='Vigilante' and nombre=vigilante_asignado
+   select 1 from boss_nomina_personal where id=persona_id and desde<=f and cargo='Vigilante'
+     and nombre in ('Vigilante 1','Vigilante 2')
+     and (nombre=vigilante_asignado or estado_turno='De descanso')
  ) then raise exception 'Selecciona al vigilante asignado para esa fecha' using errcode='22023'; end if;
 
  -- Ambos turnos se guardan juntos con la validación habitual de revisión y autor.
@@ -80,7 +82,7 @@ begin
  medio_turno:=p->>'decision'='Medio'; end if;
  if medio_turno then pago:=20; end if;
  end if;
- elsif estado_turno in ('Faltó','No convocado') then pago:=0;
+ elsif estado_turno in ('Faltó','No convocado') or (estado_turno='De descanso' and ficha.cargo='Vigilante') then pago:=0;
  elsif estado_turno='Permiso' then pago:=null;
  else raise exception 'Selecciona una asistencia' using errcode='22023'; end if;
  if ficha.cargo='Vigilante' and exists(select 1 from boss_nomina_sueldos where persona=persona_id and desde<=inicio) then pago:=0; end if;
@@ -134,6 +136,7 @@ declare
   dia date := date '2299-11-20';
   guardia uuid;
   mecanico uuid;
+  vigilante_en_descanso uuid;
   fila jsonb;
   solicitud jsonb;
   deduccion numeric;
@@ -169,11 +172,33 @@ begin
   where value->>'id'=guardia::text;
   if deduccion<>0 then raise exception 'No convocado generó un descuento'; end if;
 
+  select (value->>'id')::uuid into strict vigilante_en_descanso
+  from jsonb_array_elements(public.boss_nomina('Admin',jsonb_build_object('accion','nomina_dia','fecha',dia,'turno','Diurno'))->'personal')
+  where value#>>'{guardia,asignada}'='false';
+  perform public.boss_nomina('Admin',jsonb_build_object(
+    'accion','nomina_guardar','persona',vigilante_en_descanso,'fecha',dia,'turno','Diurno','estado','Permiso','nota','Nota anterior'
+  ));
+  perform public.boss_nomina('Admin',solicitud||jsonb_build_object(
+    'persona',vigilante_en_descanso,'estado','De descanso','revisiones','{"Diurno":1,"Nocturno":0}'::jsonb,'conservar_notas',true
+  ));
+  if (select count(*) from public.boss_nomina_asistencia where persona=vigilante_en_descanso and fecha=dia and estado='De descanso' and monto=0)<>2
+     or (select nota from public.boss_nomina_asistencia where persona=vigilante_en_descanso and fecha=dia and turno='Diurno') is distinct from 'Nota anterior'
+  then raise exception 'El descanso no se guardó correctamente'; end if;
+  select (value->>'descuento_guardias')::numeric into strict deduccion
+  from jsonb_array_elements(public.boss_nomina('Admin',jsonb_build_object('accion','nomina_resumen','fecha',dia))->'personal')
+  where value->>'id'=vigilante_en_descanso::text;
+  if deduccion<>0 then raise exception 'De descanso generó un descuento'; end if;
+
   insert into public.boss_nomina_personal(nombre,cargo,desde) values('Prueba guardias '||gen_random_uuid(),'Mecánico',dia) returning id into mecanico;
   perform public.boss_nomina('Admin',jsonb_build_object('accion','nomina_guardar','persona',mecanico,'fecha',dia,'turno','Nocturno','estado','Trabajó'));
   if (select monto from public.boss_nomina_asistencia where persona=mecanico) is distinct from 35 then
     raise exception 'No se aplicó la tarifa nocturna del mecánico';
   end if;
+  begin
+    perform public.boss_nomina('Admin',jsonb_build_object('accion','nomina_guardar','persona',mecanico,'fecha',dia,'turno','Nocturno','revision',1,'estado','De descanso'));
+    raise exception 'Se aceptó De descanso para otro cargo';
+  exception when invalid_parameter_value then null;
+  end;
   raise exception using errcode='BM001',message='Revertir pruebas de convocatoria y guardias';
 exception when sqlstate 'BM001' then null;
 end $$;
