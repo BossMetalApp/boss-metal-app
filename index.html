@@ -178,6 +178,15 @@ body.boss-authenticated #boss-login-screen{display:none}
 #nomina #nom-ayuda{font-size:.8rem;color:#395268;margin:0 0 8px}
 @media(max-width:420px){#nomina>.card{padding-inline:12px}#nomina .nom-filtros{gap:8px}}
 #nom-resumen .nom-total{display:grid;background:#173b55;color:white;padding:14px 16px;border-radius:10px;margin-bottom:8px}.nom-total span{font-size:.86rem}.nom-total small{margin-top:8px}.nom-total strong{font-size:1.55rem}#nom-resumen summary{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:42px;padding:4px 0;list-style:none}#nom-resumen summary::-webkit-details-marker{display:none}#nom-resumen summary::before{content:'›';color:#597181}#nom-resumen details[open]>summary::before{transform:rotate(90deg)}#nom-resumen summary b{font-variant-numeric:tabular-nums;font-size:.88rem;text-align:right}#nom-resumen .nom-grupo>summary{font-weight:650}#nom-resumen .nom-grupo>details{margin-left:12px;font-size:.88rem}#nom-excel{margin-top:12px}
+#nom-resumen .nom-dias{margin:8px 0 12px;border-top:1px solid #dce7ef}
+#nom-resumen .nom-dia>summary{padding:7px 4px}
+#nom-resumen .nom-dia small{display:block;color:#516373;font-size:.74rem;font-weight:400;margin-top:3px}
+#nom-resumen .nom-dias-anteriores>summary{display:flex;gap:6px;color:#1b5279;font-weight:650}
+#nom-resumen .nom-turnos-dia{margin:2px 0 8px;padding:0 10px;background:#edf4fa;border-radius:6px}
+#nom-resumen .nom-turno-dia{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px 0}
+#nom-resumen .nom-turno-dia+.nom-turno-dia{border-top:1px solid #cfdee9}
+#nom-resumen .nom-turno-dia b{text-align:right;font-variant-numeric:tabular-nums}
+#nom-resumen .nom-turno-dia small{grid-column:1/-1;overflow-wrap:anywhere}
 #materiales .material-filtros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
 #materiales .material-filtros button{min-height:44px;padding:7px 5px;background:white;border:1px solid #9bb3c4;color:#173651}
 #materiales .material-filtros button[aria-pressed="true"]{background:#173b55;border-color:#173b55;color:white}
@@ -1808,4 +1817,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos15"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos16"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>

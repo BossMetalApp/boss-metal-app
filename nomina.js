@@ -3,7 +3,6 @@
   const money = value => new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).format(value);
   const text = (tag,value) => { const node=document.createElement(tag);node.textContent=value;return node; };
   const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
-  const detail = r => [r.fecha,r.turno,attendance(r),normalizarEtiquetaUnidad(r.equipo),r.condicion === attendance(r) ? null : r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
   let selected=null, editorButton=null, visiblePeriod=null, report=null, equipment=[], version=0, saving=false;
   const shift = () => el('turno').querySelector(':checked').value;
   function closeEditor(focus=false) {
@@ -156,6 +155,72 @@
     });
   }
   window.filasNominaParaGastos=(data,dia)=>summaryRows(data,dia);
+  const payrollDay = new Intl.DateTimeFormat('es-VE',{day:'numeric',month:'short',timeZone:'UTC'});
+  function renderPayrollDays(row){
+    const dates=new Map();
+    for(const entry of row.rows){
+      if(!dates.has(entry.fecha))dates.set(entry.fecha,[]);
+      dates.get(entry.fecha).push(entry);
+    }
+    const list=document.createElement('div');
+    list.className='nom-dias';
+    const sorted=[...dates.keys()].sort((a,b)=>b.localeCompare(a));
+    for(const day of sorted.slice(0,3))appendDay(list,day);
+    const older=sorted.slice(3);
+    if(older.length){
+      const previous=document.createElement('details');
+      previous.className='nom-dias-anteriores';
+      previous.append(text('summary','Ver '+older.length+(older.length===1?' día anterior':' días anteriores')));
+      for(const day of older)appendDay(previous,day);
+      list.append(previous);
+    }
+    return list;
+
+    function appendDay(parent,day){
+      const records=dates.get(day);
+      const totals=[
+        ['Trabajó','turno trabajado','turnos trabajados'],
+        ['Faltó','falta','faltas'],
+        ['Permiso','permiso','permisos'],
+        ['Stand by','en stand by','en stand by'],
+      ];
+      const counts=totals.map(([status,singular,plural])=>{
+        const n=records.filter(entry=>attendance(entry)===status).length;
+        return n?n+' '+(n===1?singular:plural):'';
+      }).filter(Boolean);
+      const pending=records.some(entry=>entry.monto==null);
+      const cents=records.reduce((sum,entry)=>sum+Math.round(Number(entry.monto)*100),0);
+      const amount=row.fixed?'':records.every(entry=>entry.monto==null)?'Pendiente':money(cents/100);
+      const block=document.createElement('details');
+      block.className='nom-dia';
+      const summary=document.createElement('summary');
+      const label=document.createElement('span');
+      label.append(text('strong',payrollDay.format(new Date(day+'T00:00:00Z'))));
+      if(counts.length)label.append(text('small',counts.join(' · ')));
+      const subtotal=text('b',amount);
+      if(!row.fixed && pending && amount!=='Pendiente')subtotal.append(text('small','Monto parcial'));
+      summary.append(label,subtotal);
+      const shifts=document.createElement('div');
+      shifts.className='nom-turnos-dia';
+      for(const entry of records){
+        const line=document.createElement('div');
+        line.className='nom-turno-dia';
+        const estado=attendance(entry);
+        const value=row.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto);
+        line.append(text('span',entry.turno+' · '+estado),text('b',value));
+        const notes=[
+          normalizarEtiquetaUnidad(entry.equipo),
+          entry.condicion===estado?null:entry.condicion,
+          entry.estado==='Trabajó' && entry.equipo ? (entry.medio?'Medio turno':'Turno completo'):null,
+          entry.nota?'Observación · '+entry.nota:null,
+          entry.actualizado_por?'Última edición · '+entry.actualizado_por:entry.autor?'Registró · '+entry.autor:null,
+        ].filter(Boolean);
+        for(const note of notes)line.append(text('small',note));
+        shifts.append(line);
+      }
+      block.append(summary,shifts);parent.append(block);
+    }
+  }
   function renderReport(data){
     report=data;const root=el('resumen');root.replaceChildren();
     const rows=summaryRows(data), total=rows.reduce((sum,r)=>sum+Math.round(Number(r.pay)*100),0)/100;
@@ -185,7 +250,7 @@
       block.append(text('p',r.w.cargo+(r.fixed?(selectedDay()?' · Fijo prorrateado':' · Fijo quincenal'):' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
       if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.base)+' · Descuento por guardias '+money(r.deduction)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
-      for(const entry of r.rows)block.append(text('p',detail(entry)+' · '+(r.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto))));
+      if(r.rows.length)block.append(renderPayrollDays(r));
       group.append(block);
 
     }
