@@ -523,7 +523,7 @@ function renderInputs(){
     .sort((a,b)=>String(a.id).localeCompare(String(b.id),'es',{numeric:true}));
   list.innerHTML=units.map((unit,index)=>`<div class="campo-unidad">
     <div><label for="campo-viajes-${index}"><span class="campo-solo-lector">Viajes de </span>${safe(etiquetaUnidad(unit.id,unit.name))}</label>
-    <div class="campo-unidad-info" id="campo-detalle-${index}"><span class="campo-ton-viaje">${fmt(unit.m3*DENS)} t/viaje</span><span class="campo-estado-unidad"></span></div></div>
+    <div class="campo-unidad-info" id="campo-detalle-${index}"><span class="campo-ton-viaje">${fmt(unit.m3*DENS)} Ton/viaje</span><span class="campo-estado-unidad"></span></div></div>
     <input id="campo-viajes-${index}" aria-describedby="campo-detalle-${index}" type="number" min="0" max="1000" step="1" inputmode="numeric" data-unit="${safe(unit.id)}" placeholder="—">
   </div>`).join('');
   campoInputs().forEach(input=>input.addEventListener('input',sum));
