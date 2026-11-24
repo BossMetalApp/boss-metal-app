@@ -65,9 +65,9 @@
     if(!people.length){list.textContent='Sin personal por turno registrado para esta fecha.';return;}
     const lastPositions = new Map(['Mecánico','Ayudante de mecánico 1','Ayudante de mecánico 2','Chequeador','Vigilante 1','Vigilante 2'].map((name,index)=>[name,index]));
     const ordered = [...people].sort((a,b)=>(lastPositions.get(a.nombre) ?? -1)-(lastPositions.get(b.nombre) ?? -1));
-    const labels={Chofer:'Choferes',Operador:'Operadores'};
-    const groups=['Choferes','Operadores','Mecánicos y vigilancia']
-      .map(name=>({name,members:ordered.filter(w=>(labels[w.cargo]||'Mecánicos y vigilancia')===name)}))
+    const labels={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia'};
+    const groups=['Choferes','Operadores','Mecánicos','Vigilancia']
+      .map(name=>({name,members:ordered.filter(w=>(labels[w.cargo]||'Mecánicos')===name)}))
       .filter(group=>group.members.length)
       .map(group=>({...group,pending:group.members.filter(w=>!w.registro).length}));
     const initial=(groups.find(group=>group.pending)??groups[0]).name;
@@ -76,7 +76,11 @@
       block.className='nom-grupo-turno';block.dataset.grupo=name;
       block.open=opened?opened.has(name):name===initial;
       const heading=document.createElement('summary');
-      heading.append(text('strong',name),text('span',pending===0?'Completo':pending+' por registrar'));
+      const title=text('strong',name);
+      if(name==='Vigilancia'){
+        const guard=text('small','Guardia de 24 h');guard.className='nom-guardia';title.append(guard);
+      }
+      heading.append(title,text('span',pending===0?'Completo':pending+' por registrar'));
       const roster=document.createElement('div');roster.className='nom-puestos';
       block.append(heading,roster);list.append(block);
       for(const w of members){
