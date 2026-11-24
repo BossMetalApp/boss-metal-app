@@ -1,3 +1,5 @@
+alter table public.boss_nomina_personal add column if not exists asignacion text;
+
 alter table public.boss_nomina_asistencia
   drop constraint if exists boss_nomina_asistencia_estado_check,
   add constraint boss_nomina_asistencia_estado_check check (estado in ('Trabajó','Faltó','Permiso','No convocado','De descanso'));
@@ -12,6 +14,7 @@ declare
  ficha boss_nomina_personal%rowtype; personal jsonb; registros jsonb; importe numeric;
  guardia_inicio constant date := date '2026-11-16';
  vigilante_asignado text; turno_guardia text; revision_guardia integer;
+ asignacion_alta text:=nullif(trim(p->>'asignacion'),'');
 begin
  select usuario in ('Admin','Admin2') into admin from boss_usuarios where usuario=p_actor and activo and (rol='supervisor' or usuario in ('Admin','Admin2'));
  if admin is null or (accion in ('nomina_alta','nomina_sueldo','nomina_resumen') and not admin) then
@@ -24,7 +27,14 @@ begin
  fin:=case when extract(day from f)<=15 then inicio+14 else (date_trunc('month',f)+interval '1 month - 1 day')::date end;
 
  if accion='nomina_alta' then
- insert into boss_nomina_personal(nombre,cargo,desde) values(trim(p->>'nombre'),p->>'cargo',f);
+ cargo_persona:=p->>'cargo';
+ if cargo_persona='Chofer' and coalesce(asignacion_alta,'') !~ '^acarreo:[A-Za-z0-9-]{1,12}$' then
+   raise exception 'Selecciona una unidad de acarreo' using errcode='22023';
+ elsif cargo_persona='Operador' and coalesce(asignacion_alta,'') not in ('equipo:d8r','equipo:hl770','equipo:jumbo') then
+   raise exception 'Selecciona un equipo' using errcode='22023';
+ end if;
+ insert into boss_nomina_personal(nombre,cargo,desde,asignacion)
+ values(trim(p->>'nombre'),cargo_persona,f,case when cargo_persona in ('Chofer','Operador') then asignacion_alta end);
  elsif accion='nomina_sueldo' then
  select cargo into cargo_persona from boss_nomina_personal where id=persona_id;
  importe:=(p->>'monto')::numeric;
@@ -33,7 +43,7 @@ begin
  insert into boss_nomina_sueldos values(persona_id,inicio,importe) on conflict(persona,desde) do update set monto=excluded.monto;
  elsif accion='nomina_dia' then
  select coalesce(jsonb_agg(jsonb_build_object(
-   'id',w.id,'nombre',w.nombre,'cargo',w.cargo,'registro',
+   'id',w.id,'nombre',w.nombre,'cargo',w.cargo,'asignacion',w.asignacion,'registro',
    case when a.persona is null then null else to_jsonb(a)-'monto' end,
    'guardia',case when vigilante_asignado is not null and w.cargo='Vigilante' and w.nombre in ('Vigilante 1','Vigilante 2') then
      jsonb_build_object('asignada',w.nombre=vigilante_asignado,'turnos',coalesce(g.turnos,'{}'::jsonb))
@@ -137,6 +147,7 @@ declare
   guardia uuid;
   mecanico uuid;
   vigilante_en_descanso uuid;
+  nombre_alta text := 'Prueba asignación '||gen_random_uuid();
   fila jsonb;
   solicitud jsonb;
   deduccion numeric;
@@ -199,6 +210,19 @@ begin
     raise exception 'Se aceptó De descanso para otro cargo';
   exception when invalid_parameter_value then null;
   end;
+  solicitud:=jsonb_build_object('accion','nomina_alta','fecha',dia,'nombre',nombre_alta,'cargo','Chofer');
+  begin
+    perform public.boss_nomina('Admin',solicitud);
+    raise exception 'Se creó un chofer sin unidad';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.boss_nomina('Admin',solicitud||'{"asignacion":"acarreo:43"}');
+  perform public.boss_nomina('Admin',solicitud||'{"cargo":"Operador","asignacion":"equipo:jumbo"}');
+  if (select count(*) from jsonb_array_elements(public.boss_nomina('Admin',
+    jsonb_build_object('accion','nomina_dia','fecha',dia,'turno','Diurno'))->'personal') p
+    where p->>'nombre'=nombre_alta and p->>'asignacion' in ('acarreo:43','equipo:jumbo'))<>2 then
+    raise exception 'La asistencia no muestra las asignaciones guardadas';
+  end if;
   raise exception using errcode='BM001',message='Revertir pruebas de convocatoria y guardias';
 exception when sqlstate 'BM001' then null;
 end $$;
