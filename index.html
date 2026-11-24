@@ -98,7 +98,8 @@ body.boss-authenticated #boss-login-screen{display:none}
 #campo .campo-estado-unidad{font-weight:650}
 #campo .campo-estado-unidad:empty{display:none}
 #campo .campo-estado-unidad[data-estado="pendiente"]{color:#855000}
-#campo .campo-estado-unidad[data-estado="cero"]{color:#126343}
+#campo .campo-estado-unidad[data-estado="cero"],#campo .campo-estado-unidad[data-estado="guardado"]{color:#126343}
+#campo .campo-unidad input[readonly]{background:#f0f6f3;color:#17324a}
 #campo .campo-estado-unidad[data-estado="invalido"]{color:#962e2e}
 #campo .campo-total{margin-top:12px;padding:12px;background:#e1edf6;border-radius:9px;color:#17324a}
 #campo .campo-total h3{margin:0 0 8px;font-size:.94rem}
@@ -517,23 +518,66 @@ for(const radio of $('turno').querySelectorAll('input[type="radio"]')){
   radio.checked=radio.value===campoActual.shift;
 }
 $('desde').value=today().slice(0,8)+'01';$('hasta').value=today();const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function save(){try{localStorage.setItem(KEY,JSON.stringify(records));return true}catch(e){alert('No se pudo guardar: '+e.message);return false}}function cap(r){return Number(r.m3Snapshot??E.find(x=>x.id===r.unit)?.m3??0)}function density(r){return Number(r.densitySnapshot??DENS)}function calc(r){return r.trips*cap(r)*density(r)}
+let campoDia=null, campoGuardando=false;
+const campoBorradores=new Map();
+const campoTurno=()=>$('turno').querySelector(':checked').value;
+const campoClave=()=>$('fecha').value+'|'+campoTurno();
+function campoBorrador(){
+  const clave=campoClave();
+  if(!campoBorradores.has(clave))campoBorradores.set(clave,{viajes:new Map(),observacion:''});
+  return campoBorradores.get(clave);
+}
+function campoDiaConsultado(){
+  return campoDia?.date===$('fecha').value;
+}
+function campoGuardado(id){
+  return campoDiaConsultado()?campoDia.byUnit.get(id)?.[campoTurno()]:undefined;
+}
+function actualizarGuardarCampo(){
+  $('guardar').disabled=campoGuardando||!campoDiaConsultado();
+  $('limpiar').disabled=$('obs').disabled=campoGuardando;
+  for(const input of campoInputs())input.disabled=campoGuardando;
+}
 function renderInputs(){
   const list=$('entradas');
-  const units=E.filter(unit=>unit.active!==false)
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id),'es',{numeric:true}));
-  list.innerHTML=units.map((unit,index)=>`<div class="campo-unidad">
-    <div><label for="campo-viajes-${index}"><span class="campo-solo-lector">Viajes de </span>${safe(etiquetaUnidad(unit.id,unit.name))}</label>
-    <div class="campo-unidad-info" id="campo-detalle-${index}"><span class="campo-ton-viaje">${fmt(unit.m3*DENS)} Ton/viaje</span><span class="campo-estado-unidad"></span></div></div>
-    <input id="campo-viajes-${index}" aria-describedby="campo-detalle-${index}" type="number" min="0" max="1000" step="1" inputmode="numeric" data-unit="${safe(unit.id)}" placeholder="—">
-  </div>`).join('');
-  campoInputs().forEach(input=>input.addEventListener('input',sum));
+  const unidades=new Map(E.filter(unit=>unit.active!==false).map(unit=>[String(unit.id),unit]));
+  if(campoDiaConsultado()){
+    for(const [id,nombre] of campoDia.fleet){
+      if(!unidades.has(id)&&campoGuardado(id))unidades.set(id,{id,name:nombre});
+    }
+  }
+  const units=[...unidades.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id),'es',{numeric:true}));
+  const draft=campoBorrador();
+  $('obs').value=draft.observacion;
+  list.innerHTML=units.map((unit,index)=>{
+    const saved=campoGuardado(String(unit.id));
+    const capacidad=unit.m3??DEFAULT_E.find(item=>item.id===String(unit.id))?.m3;
+    const peso=saved?.trips>0?saved.tons/saved.trips:capacidad==null?null:capacidad*DENS;
+    return `<div class="campo-unidad">
+      <div><label for="campo-viajes-${index}"><span class="campo-solo-lector">Viajes de </span>${safe(etiquetaUnidad(unit.id,unit.name))}</label>
+      <div class="campo-unidad-info" id="campo-detalle-${index}"><span class="campo-ton-viaje">${peso===null?'':fmt(peso)+' Ton/viaje'}</span><span class="campo-estado-unidad"></span></div></div>
+      <input id="campo-viajes-${index}" aria-describedby="campo-detalle-${index}" type="number" min="0" max="1000" step="1" inputmode="numeric" data-unit="${safe(unit.id)}" placeholder="—">
+    </div>`;
+  }).join('');
+  for(const input of campoInputs()){
+    const saved=campoGuardado(input.dataset.unit);
+    input.value=saved?String(saved.trips):draft.viajes.get(input.dataset.unit)||'';
+    input.readOnly=!!saved;
+    input.addEventListener('input',()=>{
+      if(input.readOnly)return;
+      campoBorrador().viajes.set(input.dataset.unit,input.value);
+      sum();
+    });
+  }
+  actualizarGuardarCampo();
   sum();
 }
 function campoInputs(){
   return $('entradas').querySelectorAll('[data-unit]');
 }
 function campoUnidad(input){
-  return E.find(unit=>String(unit.id)===input.dataset.unit);
+  return E.find(unit=>String(unit.id)===input.dataset.unit)
+    ?? DEFAULT_E.find(unit=>unit.id===input.dataset.unit);
 }
 function camposValidos(input){
   const value=Number(input.value);
@@ -543,6 +587,12 @@ function sum(){
   let viajes=0,ton=0;
   for(const input of campoInputs()){
     const label=input.closest('.campo-unidad').querySelector('.campo-estado-unidad');
+    const saved=campoGuardado(input.dataset.unit);
+    if(saved){
+      label.textContent=saved.trips===0?'Cero confirmado':'Guardado';
+      label.dataset.estado=saved.trips===0?'cero':'guardado';
+      viajes+=saved.trips;ton+=saved.tons;continue;
+    }
     if(!camposValidos(input)){
       label.textContent='Cantidad inválida';label.dataset.estado='invalido';continue;
     }
@@ -559,13 +609,17 @@ function sum(){
   $('sumTon').textContent=fmt(ton)+' t';
 }
 renderInputs();
+$('obs').addEventListener('input',()=>{campoBorrador().observacion=$('obs').value;});
+$('turno').addEventListener('change',()=>{$('mensaje').textContent='';renderInputs();});
 $('guardar').onclick=async()=>{
   const session=bossSession, supervisor=session?.rol==='supervisor';
-  const date=$('fecha').value,shift=$('turno').querySelector(':checked').value;
+  if(campoGuardando||!campoDiaConsultado())return;
+  const date=$('fecha').value,shift=campoTurno();
   const name=supervisor?session.usuario:$('responsable').value.trim();
   if(!date||!name){$('mensaje').textContent='Indica fecha y responsable.';return;}
   const rows=[];
   for(const input of campoInputs()){
+    if(input.readOnly)continue;
     if(!camposValidos(input)){$('mensaje').textContent='Los viajes deben ser números enteros entre 0 y 1000.';input.focus();return;}
     if(input.value==='')continue;
     const unit=campoUnidad(input);
@@ -575,10 +629,17 @@ $('guardar').onclick=async()=>{
       name,obs:$('obs').value.trim(),created:new Date().toISOString(),
     });
   }
-  if(!rows.length){$('mensaje').textContent='Introduce al menos una cantidad de viajes.';return;}
+  if(!rows.length){
+    $('mensaje').textContent=[...campoInputs()].some(input=>input.readOnly)
+      ? 'Los viajes guardados se corrigen desde el Historial.'
+      : 'Introduce al menos una cantidad de viajes.';
+    return;
+  }
   if(supervisor||isBossAdmin(session))await saveSharedProduction(session,rows);
 };
-$('limpiar').onclick=()=>{renderInputs();$('obs').value='';$('mensaje').textContent='';};
+$('limpiar').onclick=()=>{
+  campoBorradores.delete(campoClave());renderInputs();$('mensaje').textContent='';
+};
 function render(){operationDashboardRequest++;if(bossSession?.rol==='supervisor'){if($('tablero').classList.contains('show'))loadOperationDashboard();return} $('boss-dashboard-status').hidden=true;let d=$('desde').value,h=$('hasta').value;let rr=records.filter(r=>(!d||r.date>=d)&&(!h||r.date<=h)),trips=rr.reduce((s,r)=>s+r.trips,0),tons=rr.reduce((s,r)=>s+calc(r),0),days=new Set(rr.filter(r=>r.trips>0).map(r=>r.date)).size;let metrics=[['Toneladas transportadas',fmt(tons)+' t'],['Viajes realizados',trips],['Promedio t/viaje',fmt(trips?tons/trips:0)+' t'],['Promedio toneladas/día',fmt(days?tons/days:0)+' t']];$('kpis').innerHTML=metrics.map(([k,v])=>`<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');$('porEquipo').innerHTML=E.map(e=>{let a=rr.filter(r=>r.unit===e.id),v=a.reduce((s,r)=>s+r.trips,0),t=a.reduce((s,r)=>s+calc(r),0);return `<tr><td>${safe(etiquetaUnidad(e.id,e.name))}</td><td>${v}</td><td>${fmt(t)}</td><td>${fmt(tons?t/tons*100:0)}%</td></tr>`}).join('');$('porTurno').innerHTML=['Diurno','Nocturno'].map(shift=>{let a=rr.filter(r=>r.shift===shift);return `<tr><td>${shift}</td><td>${a.reduce((s,r)=>s+r.trips,0)}</td><td>${fmt(a.reduce((s,r)=>s+calc(r),0))}</td></tr>`}).join('');$('filas').innerHTML=records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<tr><td>${r.date}</td><td>${r.shift}</td><td>${safe(etiquetaUnidad(r.unit,r.equipmentName??E.find(e=>e.id===r.unit)?.name))}</td><td>${r.trips}</td><td>${fmt(calc(r))}</td><td>${safe(r.name)}</td><td><button class="danger" data-delete="${safe(r.id)}">Borrar</button></td></tr>`).join('');document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{if(confirm('¿Eliminar este registro?')){records=records.filter(r=>r.id!==b.dataset.delete);save();render()}});$('tablaEquipos').innerHTML=E.map(e=>`<tr><td>${safe(e.id)}</td><td>${safe(e.name)}</td><td>${fmt(e.m3)}</td><td>${fmt(DENS)}</td><td>${fmt(e.m3*DENS)}</td><td>${e.active===false?'Inactiva':'Activa'}</td><td><button class="secondary" data-edit-unit="${safe(e.id)}">Editar</button> <button class="secondary" data-toggle-unit="${safe(e.id)}">${e.active===false?'Activar':'Desactivar'}</button></td></tr>`).join('');document.querySelectorAll('[data-toggle-unit]').forEach(b=>b.onclick=()=>{let e=E.find(x=>x.id===b.dataset.toggleUnit);if(!e)return;if(!confirm((e.active===false?'Activar':'Desactivar')+' unidad '+e.id+'? Los registros anteriores se conservarán.'))return;e.active=e.active===false;saveEquipos();renderInputs();render()});document.querySelectorAll('[data-edit-unit]').forEach(b=>b.onclick=()=>{let e=E.find(x=>x.id===b.dataset.editUnit);if(!e)return;$('equipoNumero').value=e.id;$('equipoNombre').value=e.name;$('equipoNombre').readOnly=nombresUnidades.has(e.id);$('equipoCapacidad').value=e.m3;$('equipoNumero').disabled=true;$('equipoAgregar').textContent='Guardar cambios';$('equipoMensaje').textContent='Editando unidad '+e.id+'. El número no puede cambiarse.'});if(isBossAdmin(bossSession)&&$('boss-dashboard-view').value==='shared'&&$('tablero').classList.contains('show'))loadOperationDashboard();}render();$('desde').onchange=render;$('hasta').onchange=render;$('boss-dashboard-view').onchange=render;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(document.body.classList.contains('boss-supervisor')&&!['campo','tablero','materiales','disponibilidad','graficas','nomina'].includes(b.dataset.tab))return;if(b.dataset.tab==='balance-produccion'){if(bossSession?.usuario!=='Admin')return;window.abrirBalanceProduccion();}if(b.dataset.tab==='gastos'){if(!isBossAdmin(bossSession))return;window.abrirGastos();}if(b.dataset.tab==='usuarios'){if(!isBossAdmin(bossSession))return;loadSupervisorAccounts();}document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('section').forEach(x=>x.classList.toggle('show',x.id===b.dataset.tab));if(b.dataset.tab==='historial'&&isBossAdmin(bossSession))loadSupervisorHistory();if(b.dataset.tab==='materiales')openMaterials();if(b.dataset.tab==='disponibilidad')loadAvailability();if(b.dataset.tab==='tablero')loadTrafficLight();if(b.dataset.tab==='campo')loadFieldDay();if(b.dataset.tab==='nomina')window.abrirNomina();if(b.dataset.tab==='graficas')loadProductionCharts();render()});function download(blob,name){let a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}$('json').onclick=()=>download(new Blob([JSON.stringify({version:2,records,equipment:E},null,2)],{type:'application/json'}),'BossMetal_Respaldo_'+today()+'.json');$('importar').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let data=JSON.parse(await f.text());if(!Array.isArray(data.records)||!data.records.every(r=>r.id&&r.date&&['Diurno','Nocturno'].includes(r.shift)&&Number.isInteger(r.trips)&&r.trips>=0))throw Error('Formato de respaldo no válido');if(!confirm('¿Importar registros? Se combinarán sin duplicar identificadores.'))return;let ids=new Set(records.map(r=>r.id));records.push(...data.records.filter(r=>!ids.has(r.id)));if(Array.isArray(data.equipment)&&data.equipment.length&&confirm('¿Restaurar también el catálogo de unidades del respaldo?')){E=normalizarCatalogo(data.equipment.filter(e=>e.id&&e.name&&Number(e.m3)>0));saveEquipos();renderInputs()}save();render();alert('Respaldo importado.')}catch(err){alert(err.message)}e.target.value=''};
 // Generador XLSX nativo: XML OpenXML + ZIP sin compresión, funciona sin bibliotecas ni internet.
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');function sheetXML(rows){let xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';rows.forEach((row,i)=>{xml+=`<row r="${i+1}">`;row.forEach((val,j)=>{let n=j+1,col='';while(n){n--;col=String.fromCharCode(65+n%26)+col;n=Math.floor(n/26)}let ref=col+(i+1);if(typeof val==='number'&&Number.isFinite(val))xml+=`<c r="${ref}"><v>${val}</v></c>`;else xml+=`<c r="${ref}" t="inlineStr"><is><t>${esc(val)}</t></is></c>`});xml+='</row>'});return xml+'</sheetData></worksheet>'}function crc32(bytes){let c=~0;for(let b of bytes){c^=b;for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0)}return (~c)>>>0}function zip(files){let chunks=[],central=[],offset=0,enc=new TextEncoder();function u16(v){return [v&255,v>>>8&255]}function u32(v){return [v&255,v>>>8&255,v>>>16&255,v>>>24&255]}for(let [name,content] of files){let nb=enc.encode(name),data=enc.encode(content),crc=crc32(data),head=new Uint8Array([80,75,3,4,20,0,0,0,0,0,0,0,0,0,...u32(crc),...u32(data.length),...u32(data.length),...u16(nb.length),0,0]);chunks.push(head,nb,data);central.push(new Uint8Array([80,75,1,2,20,0,20,0,0,0,0,0,0,0,0,0,...u32(crc),...u32(data.length),...u32(data.length),...u16(nb.length),0,0,0,0,0,0,0,0,0,0,0,0,...u32(offset)]),nb);offset+=head.length+nb.length+data.length}let cs=central.reduce((n,a)=>n+a.length,0);return new Blob([...chunks,...central,new Uint8Array([80,75,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cs),...u32(offset),0,0])],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}function xlsx(sheets){let files=[['[Content_Types].xml',`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`],['_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml',`<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${esc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],['xl/_rels/workbook.xml.rels',`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}</Relationships>`]];sheets.forEach((s,i)=>files.push([`xl/worksheets/sheet${i+1}.xml`,sheetXML(s.rows)]));return zip(files)}$('plantilla').onclick=()=>{location.href='plantilla.xlsx?v=3'};$('excel').onclick=()=>{let r=[['ID','Fecha operativa','Turno','Unidad','Equipo','Viajes','m3','Densidad t/m3','Toneladas','Responsable','Observaciones','Fecha captura']],summary=new Map();for(let x of records){let e=E.find(e=>e.id===x.unit);r.push([x.id,x.date,x.shift,x.unit,nombreUnidad(x.unit,x.equipmentName||e?.name||'Unidad retirada'),x.trips,x.trips*cap(x),density(x),calc(x),x.name,x.obs,x.created]);let key=x.date+'|'+x.shift,old=summary.get(key)||{date:x.date,shift:x.shift,trips:0,m3:0,tons:0};old.trips+=x.trips;old.m3+=x.trips*cap(x);old.tons+=calc(x);summary.set(key,old)}let daily=[['Fecha operativa','Turno','Viajes','m3','Toneladas'],...Array.from(summary.values()).sort((a,b)=>a.date.localeCompare(b.date)||a.shift.localeCompare(b.shift)).map(x=>[x.date,x.shift,x.trips,x.m3,x.tons])],equipment=[['Unidad','Equipo','Capacidad m3','Densidad t/m3','Toneladas/viaje'],...E.map(e=>[e.id,e.name,e.m3,DENS,e.m3*DENS])];download(xlsx([{name:'Registros',rows:r},{name:'Resumen por turno',rows:daily},{name:'Equipos',rows:equipment}]),'BossMetal_Produccion_'+today()+'.xlsx')};
@@ -660,12 +721,11 @@ function resetSupervisorHistory() {
   historyStatus.textContent = '';
   $('boss-edit-status').textContent = '';
   $('mensaje').textContent = '';
-  $('obs').value = '';
+  campoDia=null;campoGuardando=false;campoBorradores.clear();
   renderInputs();
   Object.assign(supervisorHistory, {next: null, editing: null, loading: false, pending: null});
   $('boss-history-refresh').disabled = false;
   $('boss-edit-save').disabled = false;
-  $('guardar').disabled = false;
 }
 
 function configureProductionHistory(session) {
@@ -788,26 +848,29 @@ async function saveSharedProduction(session, rows) {
     return;
   }
 
+  const clave=rows[0].date+'|'+rows[0].shift;
   const content = JSON.stringify(recordsToSend.map(({id, ...row}) => row));
   if (supervisorHistory.pending?.content !== content) {
     supervisorHistory.pending = {content, records: recordsToSend};
   }
-  $('guardar').disabled = true;
+  campoGuardando=true;actualizarGuardarCampo();
   $('mensaje').textContent = 'Guardando producción…';
   try {
     await requestProduction(session, {accion:'registrar', registros:supervisorHistory.pending.records});
     if (bossSession !== session) return;
     supervisorHistory.pending = null;
-    $('mensaje').textContent = 'Producción guardada en el historial compartido.';
-    $('obs').value = '';
-    renderInputs();
+    campoBorradores.delete(clave);
+    if(campoClave()===clave){
+      $('mensaje').textContent='Producción guardada en el historial compartido.';
+      renderInputs();
+    }
     if ($('tablero').classList.contains('show')) loadTrafficLight();
-    if ($('campo').classList.contains('show')) loadFieldDay();
+    if ($('campo').classList.contains('show')) await loadFieldDay();
     await loadSupervisorHistory();
   } catch (error) {
-    if (bossSession === session) $('mensaje').textContent = error.message;
+    if (bossSession===session && campoClave()===clave) $('mensaje').textContent=error.message;
   } finally {
-    if (bossSession === session) $('guardar').disabled = false;
+    if (bossSession === session) {campoGuardando=false;actualizarGuardarCampo();}
   }
 }
 
@@ -1476,6 +1539,9 @@ let fieldRequest = 0, fieldRequested = null;
 async function loadFieldDay() {
   const session=bossSession, date=$('fecha').value, request=++fieldRequest;
   fieldRequested={session,date};
+  if(!campoDiaConsultado()){
+    campoDia=null;renderInputs();
+  }
   const status=$('campo-dia-estado'), rows=$('campo-dia-filas');
   rows.replaceChildren();
   if(!session || !date){status.textContent='Selecciona la fecha operativa.';return;}
@@ -1509,6 +1575,8 @@ async function loadFieldDay() {
       const shifts=byUnit.get(code)||{};
       appendRow(name,code,shifts.Diurno,shifts.Nocturno);
     }
+    campoDia={date,byUnit,fleet};
+    renderInputs();
     const {Diurno,Nocturno}=data.days[0];
     appendRow('Total del día','',Diurno.units.size?Diurno:null,Nocturno.units.size?Nocturno:null,true);
     const label=date.split('-').reverse().join('/');
@@ -1519,6 +1587,7 @@ async function loadFieldDay() {
 function refreshFieldDate(){
   const date=$('fecha').value;
   if(fieldRequested?.session===bossSession && fieldRequested.date===date)return;
+  $('mensaje').textContent='';
   return loadFieldDay();
 }
 for(const event of ['input','change','blur'])$('fecha').addEventListener(event,refreshFieldDate);
