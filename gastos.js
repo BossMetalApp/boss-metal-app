@@ -37,6 +37,56 @@ function bounds(date,mode){
   return day<=15?[prefix+'01',prefix+'15']:[prefix+'16',prefix+last];
 }
 window.bossGastos = {periodo:bounds, normalizarDestino, vehiculo};
+function renderExpenseDays(parent,items,showCategory=false){
+  if(!items.length){
+    parent.append(text('small','Sin gastos en este período.'));
+    return;
+  }
+  const byDay=new Map();
+  for(const item of items){
+    const day=item[0];
+    if(!byDay.has(day))byDay.set(day,[]);
+    byDay.get(day).push(item);
+  }
+  const days=[...byDay.keys()].sort((a,b)=>b.localeCompare(a));
+  const list=document.createElement('div');
+  list.className='gasto-dias';
+  for(const day of days.slice(0,3))appendDay(list,day);
+  const older=days.slice(3);
+  if(older.length){
+    const previous=document.createElement('details');
+    previous.className='gasto-dias-anteriores';
+    previous.append(text('summary','Ver '+older.length+(older.length===1?' día anterior':' días anteriores')));
+    for(const day of older)appendDay(previous,day);
+    list.append(previous);
+  }
+  parent.append(list);
+
+  function appendDay(container,date){
+    const expenses=byDay.get(date);
+    const day=document.createElement('details');
+    day.className='gasto-dia';
+    const summary=document.createElement('summary'), label=document.createElement('span');
+    label.append(
+      text('strong',dayLabel.format(new Date(date+'T00:00:00Z'))),
+      text('small',expenses.length+(expenses.length===1?' gasto':' gastos'))
+    );
+    summary.append(label,text('strong',fmt(montoTotal(expenses))));
+    const lines=document.createElement('div');
+    lines.className='gasto-dia-movimientos';
+    for(const [,concept,value,category,unit,payer] of expenses){
+      const line=document.createElement('div'), description=document.createElement('div');
+      line.className='gasto-dia-movimiento';
+      description.append(text('span',concept));
+      const meta=[showCategory?category:unit,payer].filter(Boolean);
+      if(meta.length)description.append(text('small',meta.join(' · ')));
+      line.append(description,text('strong',fmt(value)));
+      lines.append(line);
+    }
+    day.append(summary,lines);
+    container.append(day);
+  }
+}
 function draw(){
   const date=by('date').value;
   if(!date)return;
@@ -64,56 +114,6 @@ function draw(){
     parent.append(group);
     return group;
   }
-  function detail(parent,items,showCategory=false){
-    if(!items.length){
-      parent.append(text('small','Sin gastos en este período.'));
-      return;
-    }
-    const byDay=new Map();
-    for(const item of items){
-      const day=item[0];
-      if(!byDay.has(day))byDay.set(day,[]);
-      byDay.get(day).push(item);
-    }
-    const days=[...byDay.keys()].sort((a,b)=>b.localeCompare(a));
-    const list=document.createElement('div');
-    list.className='gasto-dias';
-    for(const day of days.slice(0,3))appendDay(list,day);
-    const older=days.slice(3);
-    if(older.length){
-      const previous=document.createElement('details');
-      previous.className='gasto-dias-anteriores';
-      previous.append(text('summary','Ver '+older.length+(older.length===1?' día anterior':' días anteriores')));
-      for(const day of older)appendDay(previous,day);
-      list.append(previous);
-    }
-    parent.append(list);
-
-    function appendDay(container,date){
-      const expenses=byDay.get(date);
-      const day=document.createElement('details');
-      day.className='gasto-dia';
-      const summary=document.createElement('summary'), label=document.createElement('span');
-      label.append(
-        text('strong',dayLabel.format(new Date(date+'T00:00:00Z'))),
-        text('small',expenses.length+(expenses.length===1?' gasto':' gastos'))
-      );
-      summary.append(label,text('strong',fmt(montoTotal(expenses))));
-      const lines=document.createElement('div');
-      lines.className='gasto-dia-movimientos';
-      for(const [,concept,value,category,unit,payer] of expenses){
-        const line=document.createElement('div'), description=document.createElement('div');
-        line.className='gasto-dia-movimiento';
-        description.append(text('span',concept));
-        const meta=[showCategory?category:unit,payer].filter(Boolean);
-        if(meta.length)description.append(text('small',meta.join(' · ')));
-        line.append(description,text('strong',fmt(value)));
-        lines.append(line);
-      }
-      day.append(summary,lines);
-      container.append(day);
-    }
-  }
   const categories=section('Resumen por partida');
   for(const name of partidas){
     const items=rows.filter(row=>partidaResumen(row)===name);
@@ -122,15 +122,15 @@ function draw(){
       category.classList.add('gasto-vehiculos');
       for(const name of vehiculos){
         const part=items.filter(row=>vehiculo(row[4])===name);
-        detail(group(category,name,part),part,true);
+        renderExpenseDays(group(category,name,part),part,true);
       }
     }else if(name==='Consumibles'){
       for(const name of consumibles){
         const part=items.filter(row=>row[3]===name);
-        detail(group(category,name,part),part);
+        renderExpenseDays(group(category,name,part),part);
       }
     }else{
-      detail(category,items);
+      renderExpenseDays(category,items);
     }
   }
   const equipment=section('Por unidad o equipo');
@@ -142,19 +142,22 @@ function draw(){
   ]);
   for(const unit of units){
     const items=assigned.filter(row=>row[4]===unit);
-    detail(group(equipment,unit,items),items);
+    renderExpenseDays(group(equipment,unit,items),items);
   }
   const general=rows.filter(row=>row[4]==='General');
-  detail(group(section('Gastos generales'),'General',general),general);
+  renderExpenseDays(group(section('Gastos generales'),'General',general),general);
 }
 function clearBalance(){
   balance=null;by('saldo').textContent='';by('mov').replaceChildren();by('reponer').hidden=true;
 }
 function outstanding(){return (Math.round(balance.pagado*100)-Math.round(balance.repuesto*100))/100;}
+const expensesPaidByAdmin2=()=>entries.filter(row=>row[5]==='Admin2');
+function replenishments(){
+  return balance.movimientos.map(r=>({id:r.id,fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto}));
+}
 function movements(){
-  const expenses=entries.filter(r=>r[5]==='Admin2').map(r=>({fecha:r[0],tipo:'Pagado por Admin2',detalle:r[1],monto:r[2]}));
-  const payments=balance.movimientos.map(r=>({id:r.id,fecha:r.fecha,tipo:'Reposición',detalle:r.referencia,monto:r.monto,esReposicion:true}));
-  return expenses.concat(payments).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const expenses=expensesPaidByAdmin2().map(r=>({fecha:r[0],tipo:'Pagado por Admin2',detalle:r[1],monto:r[2]}));
+  return expenses.concat(replenishments()).sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
 function montoCorreccion(value){
   const texto=value.trim();
@@ -225,17 +228,17 @@ function drawBalance(){
   const f=by('pago').elements;
   if(!f.dia.value)f.dia.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
   mostrarMontoReposicion();
-  const moves=movements();
-  if(!moves.length)box.textContent='Sin movimientos en este período.';
-  for(const m of moves){
-    const line=document.createElement(m.esReposicion?'div':'p');
-    line.textContent=[m.fecha,m.tipo,m.detalle,fmt(m.monto)].filter(Boolean).join(' · ');
-    if(m.esReposicion){
-      line.className='gasto-mov-reposicion';
-      if(bossSession.usuario==='Admin'&&m.id)line.append(editarReposicion(m));
-    }
+  box.replaceChildren();
+  const payments=replenishments().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(!payments.length)box.append(text('small','Sin reposiciones en este período.'));
+  for(const payment of payments){
+    const line=text('div',[payment.fecha,payment.tipo,payment.detalle,fmt(payment.monto)].filter(Boolean).join(' · '));
+    line.className='gasto-mov-reposicion';
+    if(bossSession.usuario==='Admin' && payment.id)line.append(editarReposicion(payment));
     box.append(line);
   }
+  box.append(text('h3','Gastos pagados por Admin2'));
+  renderExpenseDays(box,expensesPaidByAdmin2());
   for(const r of entries.filter(row=>row[5]==='Por identificar')){
     const line=document.createElement('p'), select=document.createElement('select'), btn=document.createElement('button');
     line.textContent=[r[0],r[1],r[4],fmt(r[2])].join(' · ');
