@@ -1472,9 +1472,10 @@ function graphPair(trips,tons) {
   return trips.toLocaleString('es-VE')+(trips===1?' viaje / ':' viajes / ')+fmt(tons)+' t';
 }
 
-let fieldRequest = 0;
+let fieldRequest = 0, fieldRequested = null;
 async function loadFieldDay() {
   const session=bossSession, date=$('fecha').value, request=++fieldRequest;
+  fieldRequested={session,date};
   const status=$('campo-dia-estado'), rows=$('campo-dia-filas');
   rows.replaceChildren();
   if(!session || !date){status.textContent='Selecciona la fecha operativa.';return;}
@@ -1510,11 +1511,17 @@ async function loadFieldDay() {
     }
     const {Diurno,Nocturno}=data.days[0];
     appendRow('Total del día','',Diurno.units.size?Diurno:null,Nocturno.units.size?Nocturno:null,true);
-    status.textContent=date.split('-').reverse().join('/')+' · Producción guardada';
+    const label=date.split('-').reverse().join('/');
+    status.textContent=label+(data.currentReports?' · Producción guardada':' · Sin producción guardada');
     return true;
   } catch(error){if(request===fieldRequest && session===bossSession)status.textContent=error.message;}
 }
-$('fecha').addEventListener('change',loadFieldDay);
+function refreshFieldDate(){
+  const date=$('fecha').value;
+  if(fieldRequested?.session===bossSession && fieldRequested.date===date)return;
+  return loadFieldDay();
+}
+for(const event of ['input','change','blur'])$('fecha').addEventListener(event,refreshFieldDate);
 $('campo-dia-actualizar').onclick=loadFieldDay;
 
 function graphValue(value) {
