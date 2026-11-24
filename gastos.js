@@ -176,7 +176,7 @@ function drawBalance(){
   by('reponer').hidden=bossSession.usuario!=='Admin' || saldo<=0;
   const f=by('pago').elements;
   if(!f.dia.value)f.dia.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
-  f.monto.max=saldo;
+  mostrarMontoReposicion();
   const moves=movements();
   if(!moves.length)box.textContent='Sin movimientos en este período.';
   for(const m of moves){
@@ -201,18 +201,42 @@ function drawBalance(){
     line.append(select,btn);box.append(line);
   }
 }
+function mostrarMontoReposicion(){
+  const input=by('pago').elements.monto, prev=by('monto-previo');
+  const amount=montoCorreccion(input.value);
+  const ayuda='Escribe el monto sin separador de miles. Ejemplo: 1420 o 1420,50.';
+  let estado='ayuda', mensaje=ayuda;
+  if(input.value.trim()){
+    if(!(amount>0 && amount<1e12)){
+      estado='error';mensaje='Monto inválido. '+ayuda;
+    }else if(!balance){
+      mensaje='Espera a que cargue el saldo pendiente.';
+    }else if(amount>outstanding()){
+      estado='error';mensaje='Monto ingresado · '+fmt(amount)+'. Supera el saldo pendiente.';
+    }else{
+      estado='listo';mensaje='Monto a registrar · '+fmt(amount);
+    }
+  }
+  prev.dataset.estado=estado;
+  prev.textContent=mensaje;
+  input.setAttribute('aria-invalid',String(estado==='error'));
+  return estado==='listo'?amount:null;
+}
+by('pago').elements.monto.oninput=mostrarMontoReposicion;
 by('pago').onsubmit=async event=>{
   event.preventDefault();
   const session=bossSession,f=event.target,btn=f.querySelector('button');
   if(btn.disabled||session?.usuario!=='Admin')return;
-  const body={fecha:f.elements.dia.value,monto:Number(f.elements.monto.value),referencia:f.elements.ref.value.trim()};
+  const amount=mostrarMontoReposicion();
+  if(amount===null){f.elements.monto.focus();return;}
+  const body={fecha:f.elements.dia.value,monto:amount,referencia:f.elements.ref.value.trim()};
   const key=JSON.stringify(body);
   if(paymentAttempt?.key!==key)paymentAttempt={key,id:crypto.randomUUID()};
   btn.disabled=true;
   try{
     await requestProduction(session,{accion:'gastos_reponer',id:paymentAttempt.id,...body});
     if(session!==bossSession)return;
-    paymentAttempt=null;f.reset();by('reponer').open=false;
+    paymentAttempt=null;f.reset();mostrarMontoReposicion();by('reponer').open=false;
     if(await load())by('status').textContent='Reposición guardada. '+by('status').textContent;
   }catch(e){if(session===bossSession)by('status').textContent=e.message;}finally{btn.disabled=false;}
 };
@@ -245,7 +269,7 @@ function exportExpenses(){
 }
 by('exportar').onclick=exportExpenses;
 window.resetGastos=()=>{
-  clearBalance();by('pago').reset();by('reponer').open=false;paymentAttempt=null;
+  clearBalance();by('pago').reset();mostrarMontoReposicion();by('reponer').open=false;paymentAttempt=null;
   version++;entries=[];pending=null;form.reset();form.hidden=true;
   by('groups').replaceChildren();by('total').textContent='';by('period').textContent='';
   by('status').textContent='';by('date').value='';by('mensual').checked=true;$('gastos-tab').hidden=true;
