@@ -49,7 +49,8 @@
     if(saving)return;
     if(editorButton===button){closeEditor(true);return;}
     closeEditor();selected=w;editorButton=button;
-    const daily=w.guardia?.asignada;
+    const daily=!!w.guardia;
+    const resting=daily && !w.guardia.asignada;
     const [day,night]=guardRecords(w);
     const r=daily ? day || night : w.registro;
     const differentNotes=!!(day && night && day.nota!==night.nota);
@@ -63,11 +64,17 @@
     help.textContent=daily
       ? 'De 7:00 a. m. a 7:00 a. m. del día siguiente. La asistencia se aplica a ambos turnos.'
       : 'Editando únicamente el turno '+shift().toLowerCase()+'.';
+    if(resting)help.textContent='Es el día de descanso según la rotación. Al guardar, se aplica «De descanso» a ambos turnos de esta fecha.';
     if(daily && differentNotes)help.textContent+=' Deja la observación vacía para conservar las notas de cada turno.';
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
+    options.querySelector('option[value="De descanso"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
-    if(daily){
+    if(w.cargo==='Vigilante') options.add(new Option('De descanso','De descanso'));
+    for(const option of options.options)option.disabled=resting && !!option.value && option.value!=='De descanso';
+    if(resting){
+      options.value='De descanso';
+    }else if(daily){
       options.value=guardStatus(w)==='Revisar turnos'?'':attendance(r)||'';
     }else{
       options.value=attendance(r)||(offSchedule(w)?'No convocado':'');
@@ -120,23 +127,22 @@
         const label=text('span',nombrePuesto(w.nombre).replace(/^Chofer · /,''));
         label.className='nom-puesto-nombre';
         const daily=w.guardia?.asignada;
-        const records=daily?guardRecords(w).filter(Boolean):[w.registro].filter(Boolean);
+        const records=(w.guardia?guardRecords(w):[w.registro]).filter(Boolean);
         const previous=w.guardia && guardShifts.flatMap(turno=>{
           const record=w.guardia.turnos[turno];
           return record?[turno+': '+attendance(record)]:[];
         });
         let detail='';
-        if(previous?.length && (!daily || guardStatus(w)==='Revisar turnos'))detail=previous.join(' · ');
+        const state=w.guardia ? daily?guardStatus(w):'De descanso' : attendance(w.registro)||(offSchedule(w)?'No convocado':'Por registrar');
+        if(previous?.length && (state==='Revisar turnos' || (!daily && records.some(r=>r.estado!=='De descanso'))))detail=previous.join(' · ');
         else if(records.length && records.every(r=>r.autor===records[0].autor))detail='Registró: '+records[0].autor;
         if(detail){
           const metadata=text('small',detail);metadata.className='nom-puesto-meta';label.append(metadata);
         }
-        const state=w.guardia ? daily?guardStatus(w):'De descanso' : attendance(w.registro)||(offSchedule(w)?'No convocado':'Por registrar');
         const badge=text('span',state);badge.className='nom-asistencia-etiqueta';badge.dataset.estado=state;
         button.append(label,badge);
         button.setAttribute('aria-controls','nom-form');button.setAttribute('aria-expanded','false');
-        button.disabled=(w.guardia && !daily && !w.registro) ||
-          (!isBossAdmin(bossSession) && records.some(r=>r.autor!==bossSession.usuario));
+        button.disabled=!isBossAdmin(bossSession) && records.some(r=>r.autor!==bossSession.usuario);
         button.onclick=()=>edit(w,row,button);
         row.append(button);roster.append(row);
       }
@@ -225,6 +231,7 @@
         ['Faltó','falta','faltas'],
         ['Permiso','permiso','permisos'],
         ['No convocado','no convocado','no convocados'],
+        ['De descanso','turno de descanso','turnos de descanso'],
         ['Stand by','en stand by','en stand by'],
       ];
       const counts=totals.map(([status,singular,plural])=>{
@@ -249,7 +256,7 @@
         const line=document.createElement('div');
         line.className='nom-turno-dia';
         const estado=attendance(entry);
-        const value=row.fixed && estado!=='No convocado'?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto);
+        const value=row.fixed && !['No convocado','De descanso'].includes(estado)?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto);
         line.append(text('span',entry.turno+' · '+estado),text('b',value));
         const notes=[
           normalizarEtiquetaUnidad(entry.equipo),
@@ -344,10 +351,9 @@
     finally{btn.disabled=false;saving=false;}
   }
   el('form').onsubmit=e=>{
-    const daily=selected.guardia?.asignada;
     const body={fecha:el('fecha').value,persona:selected.id,
       estado:el('asistencia').value==='Stand by'?'Trabajó':el('asistencia').value,nota:el('nota').value};
-    if(daily){
+    if(selected.guardia){
       const revisiones=Object.fromEntries(guardShifts.map(turno=>[turno,selected.guardia.turnos[turno]?.revision||0]));
       const [day,night]=guardRecords(selected);
       const conservar_notas=!!(day && night && day.nota!==night.nota && !body.nota.trim());
