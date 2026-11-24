@@ -277,7 +277,13 @@
   };
   window.actualizarNomina=()=>selected || saving ? Promise.resolve(false) : load();
   window.abrirNomina=()=>{
-    if(!el('fecha').value){const current=operationalShift();el('fecha').value=el('ingreso').value=current.date;el('turno').querySelector('input[value=+current.shift+]').checked=true;}
-    load();
+    if(!el('fecha').value){
+      const current=operationalShift();
+      el('fecha').value=el('ingreso').value=current.date;
+      for(const radio of el('turno').querySelectorAll('input[type="radio"]')){
+        radio.checked=radio.value===current.shift;
+      }
+    }
+    return load();
   };
 })();
