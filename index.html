@@ -70,9 +70,65 @@ body.boss-authenticated #boss-login-screen{display:none}
 .disp-fila summary span{font-size:.76rem;font-weight:700}
 .disp-fila .actions{margin:4px 0 10px}
 .disp-fila .muted{margin:0 0 6px}
-#nomina [hidden]{display:none!important}#nomina summary{cursor:pointer;padding:8px 0}#nomina form button{margin-top:8px}#nom-lista button{display:block;width:100%;text-align:left;background:white;color:#173b55;border:0;border-bottom:1px solid #dce4ea;border-radius:0;padding:10px 2px}#nom-lista button span{display:block;font-weight:400;color:#516373}#nom-resumen details{border-bottom:1px solid #dce4ea}
+#nomina [hidden]{display:none!important}
+#nomina summary{cursor:pointer;padding:8px 0}
+#nomina form button{margin-top:8px}
+#nom-resumen details{border-bottom:1px solid #dce4ea}
+#nomina .nom-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#nomina .nom-filtros{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:12px;align-items:end}
+#nomina .nom-filtros>div{min-width:0}
+#nomina .nom-filtros label,#nomina legend{margin:0 0 4px;color:#395268;font-size:.85rem;font-weight:650}
+#nomina #nom-fecha{min-width:0;min-height:44px}
+#nomina #nom-turno{display:flex;min-width:0;margin:0;padding:0;border:0}
+#nomina #nom-turno label{position:relative;flex:1;min-width:0;margin:0}
+#nomina #nom-turno input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+#nomina #nom-turno span{display:grid;min-height:44px;place-items:center;padding:0 4px;border:1px solid #9db3c4;background:#f5f8fb;color:#173b55}
+#nomina #nom-turno label:first-of-type span{border-radius:8px 0 0 8px}
+#nomina #nom-turno label:last-of-type span{border-radius:0 8px 8px 0}
+#nomina #nom-turno input:checked+span{background:#173b55;border-color:#173b55;color:white}
+#nomina #nom-turno input:focus-visible+span{outline:2px solid #277b9e;outline-offset:2px}
+#nomina #nom-avance{margin-top:16px}
+#nomina #nom-avance-texto{display:block;font-size:.95rem}
+#nomina #nom-avance-barra{display:block;width:100%;height:7px;margin-top:7px;border:0;border-radius:9px;appearance:none}
+#nomina #nom-avance-barra::-webkit-progress-bar{background:#e0e8ee;border-radius:9px}
+#nomina #nom-avance-barra::-webkit-progress-value{background:#147452;border-radius:9px}
+#nomina #nom-avance-barra::-moz-progress-bar{background:#147452;border-radius:9px}
+#nomina .nom-actualizacion{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px}
+#nomina #nom-estado{margin:0;color:#395268;font-size:.84rem}
+#nomina #nom-actualizar{flex-shrink:0;margin-left:auto}
+#nom-lista .nom-grupo-turno{margin-bottom:10px;border:1px solid #cddce7;border-radius:10px;background:white}
+#nom-lista .nom-grupo-turno>summary{
+  display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;
+  padding:10px;min-height:44px;background:#e8f0f6;border-radius:9px;list-style:none
+}
+#nom-lista .nom-grupo-turno>summary::-webkit-details-marker{display:none}
+#nom-lista .nom-grupo-turno>summary::before{content:'›';font-weight:750;color:#315872}
+#nom-lista .nom-grupo-turno[open]>summary{border-radius:9px 9px 0 0}
+#nom-lista .nom-grupo-turno[open]>summary::before{transform:rotate(90deg)}
+#nom-lista .nom-grupo-turno>summary span{font-size:.77rem;color:#395268;text-align:right}
+#nom-lista .nom-puestos{padding:6px}
+#nom-lista .nom-puesto{border:1px solid #d7e3eb;border-radius:8px;margin-bottom:5px}
+#nom-lista .nom-puesto:last-child{margin-bottom:0}
+#nom-lista .nom-puesto-boton{
+  width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;
+  padding:8px;min-height:44px;text-align:left;border:0;border-radius:7px;background:white;color:#17324a;font-size:.9rem
+}
+#nom-lista .nom-puesto-boton[aria-expanded="true"]{background:#e8f0f6;border-radius:7px 7px 0 0}
+#nom-lista .nom-puesto-boton:disabled{opacity:1;color:#3d5366}
+#nom-lista .nom-puesto-nombre{overflow-wrap:anywhere}
+#nom-lista .nom-puesto-meta{display:block;font-weight:400;color:#516373;font-size:.73rem;margin-top:2px}
+#nom-lista .nom-asistencia-etiqueta{padding:4px 6px;border-radius:6px;background:#fff0ce;color:#693c00;font-size:.73rem;white-space:nowrap}
+#nom-lista .nom-asistencia-etiqueta[data-estado="Trabajó"]{background:#e0f3e7;color:#105336}
+#nom-lista .nom-asistencia-etiqueta[data-estado="Faltó"]{background:#fbe7e6;color:#862828}
+#nom-lista .nom-asistencia-etiqueta[data-estado="Permiso"]{background:#e7eff9;color:#274b70}
+#nomina #nom-form{padding:10px;background:#edf4fa;border-radius:0 0 7px 7px}
+#nomina #nom-form .actions{margin:8px 0 0}
+#nomina #nom-form .actions button{margin-top:0}
+#nomina #nom-form button:first-child{background:#14664d;color:white}
+#nomina #nom-ayuda{font-size:.8rem;color:#395268;margin:0 0 8px}
+@media(max-width:420px){#nomina>.card{padding-inline:12px}#nomina .nom-filtros{gap:8px}}
 #nom-resumen .nom-total{display:grid;background:#173b55;color:white;padding:14px 16px;border-radius:10px;margin-bottom:8px}.nom-total span{font-size:.86rem}.nom-total small{margin-top:8px}.nom-total strong{font-size:1.55rem}#nom-resumen summary{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:42px;padding:4px 0;list-style:none}#nom-resumen summary::-webkit-details-marker{display:none}#nom-resumen summary::before{content:'›';color:#597181}#nom-resumen details[open]>summary::before{transform:rotate(90deg)}#nom-resumen summary b{font-variant-numeric:tabular-nums;font-size:.88rem;text-align:right}#nom-resumen .nom-grupo>summary{font-weight:650}#nom-resumen .nom-grupo>details{margin-left:12px;font-size:.88rem}#nom-excel{margin-top:12px}
-#nom-lista details{border-bottom:1px solid #dce4ea}#nom-lista summary{padding:12px 0;font-weight:650}#nom-lista details button{padding-left:12px}.material-fila{border-bottom:1px solid #d9e1e6;padding:0 2px}.material-fila summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;padding:9px 0;min-height:44px;cursor:pointer;list-style:none}.material-fila summary::-webkit-details-marker{display:none}.material-fila summary strong{font-size:.92rem;overflow-wrap:anywhere}.material-fila:not([open]) summary strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.material-fila small{color:#536879}.material-fila small::before{content:'▸ ';}.material-fila[open] small::before{content:'▾ ';}.material-estado{border-radius:5px;padding:3px 6px;font-size:.74rem;background:#fff1c6;color:#674600}.material-estado[data-estado="Aprobada"]{background:#e5effc;color:#25486c}.material-estado[data-estado="Entregada"]{background:#e2f3e9;color:#205338}.material-estado[data-estado="Rechazada"]{background:#fae9e8;color:#822d2a}.material-fila p{font-size:.84rem;margin:2px 0 8px}.material-fila .actions{margin:4px 0 10px}
+.material-fila{border-bottom:1px solid #d9e1e6;padding:0 2px}.material-fila summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;padding:9px 0;min-height:44px;cursor:pointer;list-style:none}.material-fila summary::-webkit-details-marker{display:none}.material-fila summary strong{font-size:.92rem;overflow-wrap:anywhere}.material-fila:not([open]) summary strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.material-fila small{color:#536879}.material-fila small::before{content:'▸ ';}.material-fila[open] small::before{content:'▾ ';}.material-estado{border-radius:5px;padding:3px 6px;font-size:.74rem;background:#fff1c6;color:#674600}.material-estado[data-estado="Aprobada"]{background:#e5effc;color:#25486c}.material-estado[data-estado="Entregada"]{background:#e2f3e9;color:#205338}.material-estado[data-estado="Rechazada"]{background:#fae9e8;color:#822d2a}.material-fila p{font-size:.84rem;margin:2px 0 8px}.material-fila .actions{margin:4px 0 10px}
 #gastos .gasto-saldo-pendiente,#gastos .gasto-mov-reposicion{display:block;border-left:4px solid;padding:10px 12px;border-radius:6px;overflow-wrap:anywhere}
 #gastos .gasto-saldo-pendiente{margin-bottom:8px;background:#eef3f7;color:#17324a;border-color:#647b90;font-size:1.1rem}
 #gastos .gasto-saldo-por-reponer{background:#fff2ce;color:#643a00;border-color:#a85c00}
@@ -242,19 +298,30 @@ body.boss-authenticated #boss-login-screen{display:none}
     <div id="disponibilidad-lista"></div>
   </div>
 </section><section id="nomina">
-<div class="card"><h2>Nómina</h2>
-<label for="nom-fecha">Fecha operativa</label><input id="nom-fecha" type="date" required>
-<label for="nom-turno">Turno</label><select id="nom-turno"><option>Diurno</option><option>Nocturno</option></select>
-<div class="actions"><button type="button" class="secondary" id="nom-actualizar">Actualizar</button></div>
-<p id="nom-estado" role="status"></p></div>
-<div class="card"><h3>Asistencia del turno</h3><div id="nom-lista"></div>
-<form id="nom-form" hidden><h3 id="nom-nombre"></h3>
+<div class="card"><h2>Asistencia del turno</h2>
+  <div class="nom-filtros">
+    <div><label for="nom-fecha">Fecha operativa</label><input id="nom-fecha" type="date" required></div>
+    <fieldset id="nom-turno"><legend class="nom-visually-hidden">Turno</legend>
+      <label><input type="radio" name="nom-turno" value="Diurno" checked><span>Diurno</span></label>
+      <label><input type="radio" name="nom-turno" value="Nocturno"><span>Nocturno</span></label>
+    </fieldset>
+  </div>
+  <div id="nom-avance" hidden>
+    <strong id="nom-avance-texto" aria-live="polite"></strong>
+    <progress id="nom-avance-barra" aria-label="Asistencias registradas"></progress>
+  </div>
+  <div class="nom-actualizacion"><p id="nom-estado" role="status"></p><button type="button" class="secondary" id="nom-actualizar">Actualizar</button></div>
+</div>
+<div id="nom-lista"></div>
+<div id="nom-editor-inicio">
+<form id="nom-form" aria-labelledby="nom-nombre" hidden><h3 id="nom-nombre" class="nom-visually-hidden"></h3>
+<p id="nom-ayuda" hidden>Registra ambos turnos de la guardia de 24 h.</p>
 <label for="nom-asistencia">Asistencia</label><select id="nom-asistencia" required><option value="">Seleccionar</option><option>Trabajó</option><option>Faltó</option><option>Permiso</option></select>
 <div id="nom-operador" hidden><label for="nom-equipo">Máquina</label><input id="nom-equipo" list="nom-maquinas" maxlength="120"><datalist id="nom-maquinas"></datalist>
 <label for="nom-condicion">Condición durante el turno</label><select id="nom-condicion"><option value="">Seleccionar</option><option>Operativa</option><option>Fuera de servicio</option><option>Stand by</option><option>Falla durante el turno</option></select>
 <div id="nom-decision-grupo" hidden><label for="nom-decision">Turno reconocido</label><select id="nom-decision"><option value="">Seleccionar</option><option>Completo</option><option>Medio</option></select></div></div>
-<label for="nom-nota">Observación</label><input id="nom-nota" maxlength="300">
-<div class="actions"><button>Guardar asistencia</button><button type="button" class="secondary" id="nom-cancelar">Cerrar</button></div></form></div>
+<label for="nom-nota" id="nom-nota-rotulo">Observación (opcional)</label><input id="nom-nota" maxlength="300">
+<div class="actions"><button>Guardar asistencia</button><button type="button" class="secondary" id="nom-cancelar">Cancelar</button></div></form></div>
 <div id="nom-admin" hidden><div class="card"><h3>Resumen de nómina</h3><label for="nom-periodo">Período del resumen</label><select id="nom-periodo"><option value="dia">Día</option><option value="quincena" selected>Quincena</option></select><div id="nom-dia-grupo" hidden><label for="nom-fecha-resumen">Fecha del resumen</label><input type="date" id="nom-fecha-resumen"></div><div id="nom-resumen"></div><button type="button" id="nom-excel">Descargar Excel</button></div>
 <div class="card"><details><summary><strong>Registrar trabajador</strong></summary><form id="nom-alta">
 <label for="nom-persona">Nombre y apellido</label><input id="nom-persona" maxlength="100" required>
@@ -1415,4 +1482,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos12"></script><script src="./gastos.js?v=11"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos13"></script><script src="./gastos.js?v=11"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>

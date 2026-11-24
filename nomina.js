@@ -4,11 +4,21 @@
   const text = (tag,value) => { const node=document.createElement(tag);node.textContent=value;return node; };
   const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
   const detail = r => [r.fecha,r.turno,attendance(r),normalizarEtiquetaUnidad(r.equipo),r.condicion === attendance(r) ? null : r.condicion,r.estado==='Trabajó' && r.equipo ? (r.medio?'Medio turno':'Turno completo') : '',r.nota,r.actualizado_por].filter(Boolean).join(' · ');
-  let selected=null, report=null, equipment=[], version=0, saving=false;
-  function closeEditor() { selected=null;el('form').hidden=true;el('form').reset(); }
+  let selected=null, editorButton=null, visiblePeriod=null, report=null, equipment=[], version=0, saving=false;
+  const shift = () => el('turno').querySelector(':checked').value;
+  function closeEditor(focus=false) {
+    const form=el('form'), button=editorButton;
+    selected=null;editorButton=null;
+    form.hidden=true;form.reset();
+    el('editor-inicio').append(form);
+    if(button){
+      button.setAttribute('aria-expanded','false');
+      if(focus)button.focus();
+    }
+  }
   window.resetNomina=()=>{
     version++;reportVersion++;payrollPeriod=null;el('periodo').value='quincena';el('dia-grupo').hidden=true;closeEditor();report=null;equipment=[];saving=false;
-    el('admin').hidden=true;
+    visiblePeriod=null;el('admin').hidden=true;el('avance').hidden=true;
     for(const id of ['lista','resumen','supervisor','maquinas','estado','vigencia']) el(id).replaceChildren();
     el('alta').reset();el('fijo').reset();el('fecha').value='';
   };
@@ -21,41 +31,69 @@
     el('operador').hidden=!operator;el('decision-grupo').hidden=!failure;
     el('equipo').required=el('condicion').required=operator;
     el('decision').required=el('nota').required=failure;
+    el('nota-rotulo').textContent=failure?'Observación (obligatoria)':'Observación (opcional)';
   }
-  function edit(w){
-    closeEditor();selected=w;
+  function edit(w,row,button){
+    if(saving)return;
+    if(editorButton===button){closeEditor(true);return;}
+    closeEditor();selected=w;editorButton=button;
     const r=w.registro;
     const assigned=availabilityExtra.find(item=>w.cargo==='Operador' && w.nombre==='Operador '+item.nombre);
     const fixed=!!assigned && (!r?.equipo || r.equipo===assigned.nombre);
     el('equipo').hidden=fixed;
     document.querySelector('label[for="nom-equipo"]').hidden=fixed;
-    el('nombre').textContent=nombrePuesto(w.nombre)+' · '+w.cargo+(w.cargo==='Vigilante'?' · Registra ambos turnos de la guardia de 24 h.':'');
+    el('nombre').textContent='Asistencia de '+nombrePuesto(w.nombre);
+    el('ayuda').hidden=w.cargo!=='Vigilante';
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
     options.value=attendance(r)||'';el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
     if(fixed && !r?.condicion) el('equipo').onchange();
-    el('nota').value=r?.nota||'';fields();el('form').hidden=false;el('asistencia').focus();
+    el('nota').value=r?.nota||'';
+    fields();
+    row.append(el('form'));el('form').hidden=false;
+    button.setAttribute('aria-expanded','true');el('asistencia').focus();
   }
-  function renderPeople(people){
+  function renderPeople(people,opened){
     const list=el('lista');list.replaceChildren();
-    if(!people.length) list.textContent='Sin personal por turno registrado para esta fecha.';
+    const registered=people.filter(w=>w.registro).length;
+    el('avance').hidden=!people.length;
+    el('avance-texto').textContent=registered+' de '+people.length+' registrados';
+    el('avance-barra').max=people.length||1;
+    el('avance-barra').value=registered;
+    if(!people.length){list.textContent='Sin personal por turno registrado para esta fecha.';return;}
     const lastPositions = new Map(['Mecánico','Ayudante de mecánico 1','Ayudante de mecánico 2','Chequeador','Vigilante 1','Vigilante 2'].map((name,index)=>[name,index]));
     const ordered = [...people].sort((a,b)=>(lastPositions.get(a.nombre) ?? -1)-(lastPositions.get(b.nombre) ?? -1));
-    if(people.length)list.append(text('p',people.filter(w=>w.registro).length+' de '+people.length+' puestos registrados'));
-    const labels={Chofer:'Choferes',Operador:'Operadores',Vigilante:'Vigilancia'};
-    for(const group of ['Choferes','Operadores','Mecánicos','Vigilancia']){
-      const members=ordered.filter(w=>(labels[w.cargo]||'Mecánicos')===group);
-      if(!members.length)continue;
+    const labels={Chofer:'Choferes',Operador:'Operadores'};
+    const groups=['Choferes','Operadores','Mecánicos y vigilancia']
+      .map(name=>({name,members:ordered.filter(w=>(labels[w.cargo]||'Mecánicos y vigilancia')===name)}))
+      .filter(group=>group.members.length)
+      .map(group=>({...group,pending:group.members.filter(w=>!w.registro).length}));
+    const initial=(groups.find(group=>group.pending)??groups[0]).name;
+    for(const {name,members,pending} of groups){
       const block=document.createElement('details');
-      block.append(text('summary',group+' · '+members.filter(w=>w.registro).length+' de '+members.length));
-      list.append(block);
+      block.className='nom-grupo-turno';block.dataset.grupo=name;
+      block.open=opened?opened.has(name):name===initial;
+      const heading=document.createElement('summary');
+      heading.append(text('strong',name),text('span',pending===0?'Completo':pending+' por registrar'));
+      const roster=document.createElement('div');roster.className='nom-puestos';
+      block.append(heading,roster);list.append(block);
       for(const w of members){
-      const button=text('button',nombrePuesto(w.nombre));button.type='button';
-      button.append(text('span',w.cargo+' · '+(attendance(w.registro)||'Sin registrar')+(w.registro?' · '+w.registro.autor:'')));
-      button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
-      button.onclick=()=>edit(w);block.append(button);
+        const row=document.createElement('div');row.className='nom-puesto';
+        const button=document.createElement('button');button.type='button';button.className='nom-puesto-boton';
+        const label=text('span',nombrePuesto(w.nombre).replace(/^Chofer · /,''));
+        label.className='nom-puesto-nombre';
+        if(w.registro?.autor){
+          const author=text('small','Registró: '+w.registro.autor);author.className='nom-puesto-meta';label.append(author);
+        }
+        const state=attendance(w.registro)||'Por registrar';
+        const badge=text('span',state);badge.className='nom-asistencia-etiqueta';badge.dataset.estado=state;
+        button.append(label,badge);
+        button.setAttribute('aria-controls','nom-form');button.setAttribute('aria-expanded','false');
+        button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
+        button.onclick=()=>edit(w,row,button);
+        row.append(button);roster.append(row);
       }
     }
   }
@@ -152,12 +190,16 @@
   }
   async function load(message=''){
     const session=bossSession;if(!session)return;
-    const seq=++version, admin=isBossAdmin(session),fecha=el('fecha').value;
+    const seq=++version, admin=isBossAdmin(session),fecha=el('fecha').value,turno=shift();
+    const period=fecha+'|'+turno, groups=el('lista').querySelectorAll('.nom-grupo-turno');
+    const opened=visiblePeriod===period && groups.length
+      ? new Set([...groups].filter(group=>group.open).map(group=>group.dataset.grupo)) : null;
     reportVersion++;payrollPeriod=null;closeEditor();report=null;el('resumen').replaceChildren();el('lista').replaceChildren();
+    el('avance').hidden=true;
     el('admin').hidden=true;el('estado').textContent='Consultando nómina…';
     try{
       const [day,summary,machines]=await Promise.all([
-        requestProduction(session,{accion:'nomina_dia',fecha,turno:el('turno').value}),
+        requestProduction(session,{accion:'nomina_dia',fecha,turno}),
         admin?requestProduction(session,{accion:'nomina_resumen',fecha}):null,
         requestProduction(session,{accion:'disponibilidad_listar'}).catch(()=>({equipos:[]}))
       ]);
@@ -167,7 +209,7 @@
         : item);
       const names=new Set([...availabilityExtra.map(x=>x.nombre),...equipment.map(x=>x.nombre)]);
       el('maquinas').replaceChildren(...[...names].map(name=>new Option(name,name)));
-      renderPeople(day.personal);
+      visiblePeriod=period;renderPeople(day.personal,opened);
       if(admin){
         payrollPeriod=summary;
         el('supervisor').replaceChildren(new Option('Seleccionar',''),...summary.personal.filter(w=>w.cargo==='Supervisor').map(w=>new Option(w.nombre,w.id)));
@@ -189,7 +231,7 @@
     }catch(err){if(session===bossSession){el('estado').textContent=err.message;el('estado').scrollIntoView({block:'center'});}}
     finally{btn.disabled=false;saving=false;}
   }
-  el('form').onsubmit=e=>save(e,{accion:'nomina_guardar',fecha:el('fecha').value,turno:el('turno').value,persona:selected.id,
+  el('form').onsubmit=e=>save(e,{accion:'nomina_guardar',fecha:el('fecha').value,turno:shift(),persona:selected.id,
     revision:selected.registro?.revision||0,estado:el('asistencia').value==='Stand by'?'Trabajó':el('asistencia').value,equipo:el('equipo').value,
     condicion:el('condicion').value,decision:el('decision').value,nota:el('nota').value});
   el('alta').onsubmit=e=>save(e,{accion:'nomina_alta',fecha:el('ingreso').value,nombre:el('persona').value.trim(),cargo:el('cargo').value});
@@ -208,7 +250,7 @@
     fields();
   };
   el('fecha').onchange=el('turno').onchange=el('actualizar').onclick=()=>load();
-  el('cancelar').onclick=closeEditor;
+  el('cancelar').onclick=()=>{if(!saving)closeEditor(true);};
   el('periodo').onchange=()=>{
     const daily=el('periodo').value==='dia';
     el('dia-grupo').hidden=!daily;
@@ -231,7 +273,7 @@
   };
   window.actualizarNomina=()=>selected || saving ? Promise.resolve(false) : load();
   window.abrirNomina=()=>{
-    if(!el('fecha').value){const current=operationalShift();el('fecha').value=el('ingreso').value=current.date;el('turno').value=current.shift;}
+    if(!el('fecha').value){const current=operationalShift();el('fecha').value=el('ingreso').value=current.date;el('turno').querySelector('input[value=+current.shift+]').checked=true;}
     load();
   };
 })();
