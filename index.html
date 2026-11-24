@@ -129,7 +129,33 @@ body.boss-authenticated #boss-login-screen{display:none}
 #nomina #nom-ayuda{font-size:.8rem;color:#395268;margin:0 0 8px}
 @media(max-width:420px){#nomina>.card{padding-inline:12px}#nomina .nom-filtros{gap:8px}}
 #nom-resumen .nom-total{display:grid;background:#173b55;color:white;padding:14px 16px;border-radius:10px;margin-bottom:8px}.nom-total span{font-size:.86rem}.nom-total small{margin-top:8px}.nom-total strong{font-size:1.55rem}#nom-resumen summary{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:42px;padding:4px 0;list-style:none}#nom-resumen summary::-webkit-details-marker{display:none}#nom-resumen summary::before{content:'›';color:#597181}#nom-resumen details[open]>summary::before{transform:rotate(90deg)}#nom-resumen summary b{font-variant-numeric:tabular-nums;font-size:.88rem;text-align:right}#nom-resumen .nom-grupo>summary{font-weight:650}#nom-resumen .nom-grupo>details{margin-left:12px;font-size:.88rem}#nom-excel{margin-top:12px}
-.material-fila{border-bottom:1px solid #d9e1e6;padding:0 2px}.material-fila summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;padding:9px 0;min-height:44px;cursor:pointer;list-style:none}.material-fila summary::-webkit-details-marker{display:none}.material-fila summary strong{font-size:.92rem;overflow-wrap:anywhere}.material-fila:not([open]) summary strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.material-fila small{color:#536879}.material-fila small::before{content:'▸ ';}.material-fila[open] small::before{content:'▾ ';}.material-estado{border-radius:5px;padding:3px 6px;font-size:.74rem;background:#fff1c6;color:#674600}.material-estado[data-estado="Aprobada"]{background:#e5effc;color:#25486c}.material-estado[data-estado="Entregada"]{background:#e2f3e9;color:#205338}.material-estado[data-estado="Rechazada"]{background:#fae9e8;color:#822d2a}.material-fila p{font-size:.84rem;margin:2px 0 8px}.material-fila .actions{margin:4px 0 10px}
+#materiales .material-filtros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+#materiales .material-filtros button{min-height:44px;padding:7px 5px;background:white;border:1px solid #9bb3c4;color:#173651}
+#materiales .material-filtros button[aria-pressed="true"]{background:#173b55;border-color:#173b55;color:white}
+#materiales .material-refresco{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+#materiales-estado{margin:0;font-size:.85rem;color:#395268}
+#materiales-refresh{margin-left:auto;flex-shrink:0}
+#materiales .material-fila{margin-bottom:9px;border:1px solid #cbdbe7;border-radius:10px;background:white}
+#materiales .material-fila>summary{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:3px 8px;align-items:start;min-height:44px;padding:11px 9px;cursor:pointer;list-style:none}
+#materiales .material-fila>summary::-webkit-details-marker{display:none}
+#materiales .material-fila>summary::before{content:'›';color:#315872;font-weight:750}
+#materiales .material-fila[open]>summary::before{transform:rotate(90deg)}
+#materiales .material-fila summary strong{font-size:.95rem;overflow-wrap:anywhere}
+#materiales .material-destino{grid-column:2/-1;color:#395268;overflow-wrap:anywhere}
+#materiales .material-estado{border-radius:6px;padding:4px 6px;font-size:.73rem;font-weight:700;background:#fff1c6;color:#674600;white-space:nowrap}
+#materiales .material-estado[data-estado="Aprobada"]{background:#e5effc;color:#25486c}
+#materiales .material-estado[data-estado="Entregada"]{background:#e2f3e9;color:#205338}
+#materiales .material-estado[data-estado="Rechazada"]{background:#fae9e8;color:#822d2a}
+#materiales .material-detalle{margin:0 9px 9px;padding:10px 0 1px;border-top:1px solid #d8e3eb}
+#materiales .material-datos{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;margin:0 0 12px;font-size:.83rem}
+#materiales .material-datos dt{font-weight:700}
+#materiales .material-datos dd{margin:0;overflow-wrap:anywhere}
+#materiales .material-editor label{margin:0;font-size:.85rem;font-weight:650}
+#materiales .material-editor button{display:block;width:100%;margin-top:8px}
+#materiales .material-editor button:first-of-type{background:#14664d;color:white}
+#materiales .material-cambio{display:block;margin-top:6px;color:#693c00;font-weight:650}
+#materiales [hidden]{display:none!important}
+@media(max-width:420px){#materiales>.card{padding-inline:12px}}
 #gastos .gasto-saldo-pendiente,#gastos .gasto-mov-reposicion{display:block;border-left:4px solid;padding:10px 12px;border-radius:6px;overflow-wrap:anywhere}
 #gastos .gasto-saldo-pendiente{margin-bottom:8px;background:#eef3f7;color:#17324a;border-color:#647b90;font-size:1.1rem}
 #gastos .gasto-saldo-por-reponer{background:#fff2ce;color:#643a00;border-color:#a85c00}
@@ -286,8 +312,13 @@ body.boss-authenticated #boss-login-screen{display:none}
 </div>
 <div class="card">
   <h2 id="materiales-titulo">Solicitudes de materiales</h2>
-  <button class="secondary" id="materiales-refresh" type="button">Actualizar</button>
-  <p id="materiales-estado" role="status"></p>
+  <div class="material-filtros" id="materiales-filtros" role="group" aria-label="Filtrar por estado">
+    <button type="button" data-estado="Pendiente" aria-pressed="true">Pendientes</button>
+    <button type="button" data-estado="Aprobada" aria-pressed="false">Aprobadas</button>
+    <button type="button" data-estado="Entregada" aria-pressed="false">Entregadas</button>
+    <button type="button" data-estado="Rechazada" aria-pressed="false">Rechazadas</button>
+  </div>
+  <div class="material-refresco"><p id="materiales-estado" role="status"></p><button class="secondary" id="materiales-refresh" type="button">Actualizar</button></div>
   <div id="materiales-lista"></div>
   <button class="secondary" id="materiales-mas" type="button" hidden>Ver más</button>
 </div>
@@ -720,19 +751,31 @@ supervisorCreateForm.onsubmit = (event) => {
 };
 
 
-const materials = { busy: false, next: null, pending: null };
-const materialStates = ['Pendiente', 'Aprobada', 'Entregada', 'Rechazada'];
+const materials = {busy:false,next:null,pending:null,estado:'Pendiente'};
+const materialStates = ['Pendiente','Aprobada','Entregada','Rechazada'];
 const materialForm = $('materiales-form');
 let materialDraft = null;
-document.addEventListener('change', event => {
-  if (event.target.matches('#materiales-lista select')) materialDraft = event.target;
-});
 const materialList = $('materiales-lista');
 const materialStatus = $('materiales-estado');
 const materialsMore = $('materiales-mas');
+const materialFilters = [...$('materiales-filtros').querySelectorAll('button[data-estado]')];
+const materialText = (tag,value) => Object.assign(document.createElement(tag),{textContent:value});
+const materialDate = new Intl.DateTimeFormat('es-VE',{timeZone:'America/Caracas',dateStyle:'short',timeStyle:'short'});
+
+function setMaterialFilter(estado) {
+  if (materials.estado !== estado) {
+    materialList.replaceChildren();
+    materials.next = null;
+    materialsMore.hidden = true;
+  }
+  materials.estado = estado;
+  for (const button of materialFilters) button.setAttribute('aria-pressed',String(button.dataset.estado===estado));
+}
 
 function resetMaterials() {
-  Object.assign(materials, {busy: false, next: null, pending: null});
+  Object.assign(materials,{busy:false,next:null,pending:null});
+  materialDraft = null;
+  setMaterialFilter('Pendiente');
   materialForm.reset();
   updateVehicleField();
   $('materiales-nueva').hidden = true;
@@ -747,7 +790,19 @@ function setMaterialsBusy(busy) {
   $('materiales-enviar').disabled = busy;
   $('materiales-refresh').disabled = busy;
   materialsMore.disabled = busy;
-  materialList.querySelectorAll('button, select').forEach(item => { item.disabled = busy; });
+  materialFilters.forEach(button => { button.disabled = busy; });
+  for (const editor of materialList.querySelectorAll('.material-editor')) {
+    const active = materialDraft?.editor === editor;
+    editor.querySelector('select').disabled = busy || (!!materialDraft && !active);
+    editor.querySelectorAll('button').forEach(button => { button.disabled = busy || !active; });
+  }
+}
+
+function hasMaterialDraft() {
+  if (!materialDraft) return false;
+  materialStatus.textContent = 'Tienes un cambio sin guardar. Guarda o descarta el cambio para continuar.';
+  materialDraft.card.open = true;
+  return true;
 }
 
 function updateVehicleField() {
@@ -775,51 +830,88 @@ function openMaterials() {
   }
   if ([...select.options].some(option => option.value === previous)) select.value = previous;
   updateVehicleField();
-  updateMaterials();
+  if (!materials.busy && !hasMaterialDraft()) {
+    setMaterialFilter('Pendiente');
+    updateMaterials();
+  }
 }
 
-function appendMaterialCard(item, admin) {
+function appendMaterialCard(item, admin, open=false) {
   const card = document.createElement('details');
   card.className = 'material-fila';
+  card.dataset.id = item.id;
+  card.open = open;
   const heading = document.createElement('summary');
-  const title = document.createElement('strong');
-  title.textContent = item.descripcion;
-  const state = document.createElement('span');
+  const title = materialText('strong',item.descripcion+' · '+Number(item.cantidad).toLocaleString('es-VE'));
+  const state = materialText('span',item.estado);
   state.className = 'material-estado';
   state.dataset.estado = item.estado;
-  state.textContent = item.estado;
-  const destination = document.createElement('small');
-  destination.textContent = item.unidad ? etiquetaUnidad(item.unidad,E.find(unit=>unit.id===item.unidad)?.name) : item.vehiculo || item.equipo_adicional || 'Sin unidad asignada';
+  const destination = materialText('span',item.unidad
+    ? etiquetaUnidad(item.unidad,E.find(unit=>unit.id===item.unidad)?.name)
+    : item.vehiculo || item.equipo_adicional || 'Sin unidad asignada');
+  destination.className = 'material-destino';
   heading.append(title,state,destination);
-  const info = document.createElement('p');
-  info.textContent = [item.categoria,'Cantidad: '+item.cantidad,item.solicitado_por,new Date(item.creado_en).toLocaleString('es-VE')].filter(Boolean).join(' · ');
-  card.append(heading,info);
-  if (admin) {
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', 'Nuevo estado de ' + item.descripcion);
-    for (const state of materialStates) select.add(new Option(state, state));
-    select.value = item.estado;
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = 'Guardar estado';
-    button.onclick = () => {
-      if (select.value !== item.estado) updateMaterials({
-        accion: 'materiales_estado', id: item.id,
-        estado: select.value, actualizado_en: item.actualizado_en,
-      });
-    };
-    actions.append(select, button);
-    card.append(actions);
+  const body = document.createElement('div');
+  body.className = 'material-detalle';
+  const info = document.createElement('dl');
+  info.className = 'material-datos';
+  const date = new Date(item.creado_en);
+  for (const [label,value] of [
+    ['Categoría',item.categoria],
+    ['Solicitado por',item.solicitado_por],
+    ['Fecha',Number.isFinite(date.getTime())?materialDate.format(date):''],
+  ]) {
+    if (value) info.append(materialText('dt',label),materialText('dd',value));
   }
+  body.append(info);
+  if (admin) {
+    const editor = document.createElement('div');
+    editor.className = 'material-editor';
+    const label = materialText('label','Cambiar estado');
+    const select = document.createElement('select');
+    select.setAttribute('aria-label','Cambiar estado de '+item.descripcion);
+    for (const state of materialStates) select.add(new Option(state,state));
+    select.value = item.estado;
+    label.append(select);
+    const draft = materialText('small','Cambio sin guardar');
+    draft.className = 'material-cambio';
+    draft.hidden = true;
+    const save = materialText('button','Guardar estado');
+    save.type = 'button';
+    const discard = materialText('button','Descartar cambio');
+    discard.className = 'secondary';
+    discard.type = 'button';
+    discard.hidden = true;
+    function updateDraft() {
+      const changed = select.value !== item.estado;
+      materialDraft = changed ? {card,editor} : null;
+      draft.hidden = discard.hidden = !changed;
+      materialStatus.textContent = '';
+      setMaterialsBusy(false);
+    }
+    select.onchange = updateDraft;
+    save.onclick = () => updateMaterials({
+      accion:'materiales_estado',id:item.id,estado:select.value,actualizado_en:item.actualizado_en,
+    });
+    discard.onclick = () => {
+      select.value = item.estado;
+      updateDraft();
+      select.focus();
+    };
+    editor.append(label,draft,save,discard);
+    body.append(editor);
+  }
+  card.append(heading,body);
   materialList.append(card);
 }
 
 async function updateMaterials(action = null, append = false) {
   const session = bossSession;
   const admin = isBossAdmin(session);
-  if ((!admin && session?.rol !== 'supervisor') || materials.busy) return;
+  if ((!admin && session?.rol !== 'supervisor') || materials.busy) return false;
+  if (!action && hasMaterialDraft()) return false;
+  if (append && materials.next===null) return false;
+  const opened = new Set([...materialList.querySelectorAll('details[open]')].map(card=>card.dataset.id));
   setMaterialsBusy(true);
   let notice = '';
   materialStatus.textContent = action ? 'Guardando…' : 'Cargando solicitudes…';
@@ -832,20 +924,25 @@ async function updateMaterials(action = null, append = false) {
         updateVehicleField();
         materials.pending = null;
         notice = 'Solicitud enviada.';
+        setMaterialFilter('Pendiente');
       } else {
+        materialDraft?.card.remove();
+        materialDraft = null;
+        materials.next = null;
+        materialsMore.hidden = true;
         notice = 'Estado actualizado.';
       }
     }
     const result = await requestProduction(session, {
-      accion: 'materiales_listar', offset: append ? materials.next : 0,
+      accion:'materiales_listar',estado:materials.estado,offset:append?materials.next:0,
     });
     if (bossSession !== session) return;
-    if (!action && !append && materialDraft && materialList.contains(materialDraft)) return false;
     if (!append) materialList.replaceChildren();
-    for (const item of result.solicitudes) appendMaterialCard(item, admin);
+    for (const item of result.solicitudes) appendMaterialCard(item,admin,opened.has(String(item.id)));
     materials.next = result.siguiente;
     materialsMore.hidden = result.siguiente === null;
-    materialStatus.textContent = notice || (materialList.childElementCount ? '' : 'Aún no hay solicitudes.');
+    const empty = materialList.childElementCount ? '' : 'No hay solicitudes '+materials.estado.toLowerCase()+'s.';
+    materialStatus.textContent = [notice,empty].filter(Boolean).join(' ');
     return true;
   } catch (error) {
     if (bossSession === session) materialStatus.textContent = notice
@@ -856,6 +953,11 @@ async function updateMaterials(action = null, append = false) {
   }
 }
 
+for (const button of materialFilters) button.onclick = () => {
+  if (materials.busy || hasMaterialDraft() || materials.estado === button.dataset.estado) return;
+  setMaterialFilter(button.dataset.estado);
+  updateMaterials();
+};
 $('materiales-refresh').onclick = () => updateMaterials();
 materialsMore.onclick = () => updateMaterials(null, true);
 materialForm.onsubmit = (event) => {
@@ -1447,7 +1549,7 @@ graphPeriod.onchange = () => {
     if(!session || !tab || running || document.hidden) return;
     if(owner !== session){owner=session;times.clear();}
     if(!navigator.onLine){message(tab,'Sin conexión');return;}
-    if(tab==='nomina' && !$('nom-form').hidden || tab==='materiales' && materialDraft && materialList.contains(materialDraft)){
+    if(tab==='nomina' && !$('nom-form').hidden || tab==='materiales' && materialDraft){
       message(tab,'Termina la edición para actualizar');return;
     }
     const jobs = {
