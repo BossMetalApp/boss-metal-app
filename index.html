@@ -171,6 +171,7 @@ body.boss-authenticated #boss-login-screen{display:none}
 #nom-lista .nom-asistencia-etiqueta[data-estado="Trabajó"]{background:#e0f3e7;color:#105336}
 #nom-lista .nom-asistencia-etiqueta[data-estado="Faltó"]{background:#fbe7e6;color:#862828}
 #nom-lista .nom-asistencia-etiqueta[data-estado="Permiso"]{background:#e7eff9;color:#274b70}
+#nom-lista .nom-asistencia-etiqueta:is([data-estado="No convocado"],[data-estado="De descanso"]){background:#e9eef2;color:#395268}
 #nomina #nom-form{padding:10px;background:#edf4fa;border-radius:0 0 7px 7px}
 #nomina #nom-form .actions{margin:8px 0 0}
 #nomina #nom-form .actions button{margin-top:0}
@@ -436,8 +437,8 @@ body.boss-authenticated #boss-login-screen{display:none}
 <div id="nom-lista"></div>
 <div id="nom-editor-inicio">
 <form id="nom-form" aria-labelledby="nom-nombre" hidden><h3 id="nom-nombre" class="nom-visually-hidden"></h3>
-<p id="nom-ayuda" hidden>Registra ambos turnos de la guardia de 24 h.</p>
-<label for="nom-asistencia">Asistencia</label><select id="nom-asistencia" required><option value="">Seleccionar</option><option>Trabajó</option><option>Faltó</option><option>Permiso</option></select>
+<p id="nom-ayuda" hidden></p>
+<label for="nom-asistencia">Asistencia</label><select id="nom-asistencia" required><option value="">Seleccionar</option><option>Trabajó</option><option>Faltó</option><option>Permiso</option><option>No convocado</option></select>
 <div id="nom-operador" hidden><label for="nom-equipo">Máquina</label><input id="nom-equipo" list="nom-maquinas" maxlength="120"><datalist id="nom-maquinas"></datalist>
 <label for="nom-condicion">Condición durante el turno</label><select id="nom-condicion"><option value="">Seleccionar</option><option>Operativa</option><option>Fuera de servicio</option><option>Stand by</option><option>Falla durante el turno</option></select>
 <div id="nom-decision-grupo" hidden><label for="nom-decision">Turno reconocido</label><select id="nom-decision"><option value="">Seleccionar</option><option>Completo</option><option>Medio</option></select></div></div>
@@ -1817,4 +1818,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos16"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos17"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>

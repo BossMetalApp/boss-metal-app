@@ -5,6 +5,19 @@
   const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
   let selected=null, editorButton=null, visiblePeriod=null, report=null, equipment=[], version=0, saving=false;
   const shift = () => el('turno').querySelector(':checked').value;
+  const guardShifts=['Diurno','Nocturno'];
+  const daytimeRoles=new Set(['Mecánico','Ayudante de mecánico','Chequeador']);
+  const offSchedule=w=>shift()==='Nocturno' && daytimeRoles.has(w.cargo);
+  const guardRecords=w=>guardShifts.map(turno=>w.guardia?.turnos[turno]);
+  function guardStatus(w){
+    const [day,night]=guardRecords(w);
+    if(!day && !night)return 'Por registrar';
+    return day && night && day.estado===night.estado ? day.estado : 'Revisar turnos';
+  }
+  const counted=w=>w.guardia ? w.guardia.asignada : !offSchedule(w) || !!w.registro;
+  const registered=w=>w.guardia
+    ? !['Por registrar','Revisar turnos'].includes(guardStatus(w))
+    : !!w.registro;
   function closeEditor(focus=false) {
     const form=el('form'), button=editorButton;
     selected=null;editorButton=null;
@@ -36,31 +49,45 @@
     if(saving)return;
     if(editorButton===button){closeEditor(true);return;}
     closeEditor();selected=w;editorButton=button;
-    const r=w.registro;
+    const daily=w.guardia?.asignada;
+    const [day,night]=guardRecords(w);
+    const r=daily ? day || night : w.registro;
+    const differentNotes=!!(day && night && day.nota!==night.nota);
     const assigned=availabilityExtra.find(item=>w.cargo==='Operador' && w.nombre==='Operador '+item.nombre);
     const fixed=!!assigned && (!r?.equipo || r.equipo===assigned.nombre);
     el('equipo').hidden=fixed;
     document.querySelector('label[for="nom-equipo"]').hidden=fixed;
-    el('nombre').textContent='Asistencia de '+nombrePuesto(w.nombre);
-    el('ayuda').hidden=w.cargo!=='Vigilante';
+    el('nombre').textContent=(daily?'Guardia de 24 h de ':'Asistencia de ')+nombrePuesto(w.nombre);
+    const help=el('ayuda');
+    help.hidden=w.cargo!=='Vigilante';
+    help.textContent=daily
+      ? 'De 7:00 a. m. a 7:00 a. m. del día siguiente. La asistencia se aplica a ambos turnos.'
+      : 'Editando únicamente el turno '+shift().toLowerCase()+'.';
+    if(daily && differentNotes)help.textContent+=' Deja la observación vacía para conservar las notas de cada turno.';
     const options=el('asistencia');
     options.querySelector('option[value="Stand by"]')?.remove();
     if(w.cargo==='Operador') options.add(new Option('Stand by','Stand by'));
-    options.value=attendance(r)||'';el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||'';
+    if(daily){
+      options.value=guardStatus(w)==='Revisar turnos'?'':attendance(r)||'';
+    }else{
+      options.value=attendance(r)||(offSchedule(w)?'No convocado':'');
+    }
+    el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
     if(fixed && !r?.condicion) el('equipo').onchange();
-    el('nota').value=r?.nota||'';
+    el('nota').value=daily && differentNotes?'':r?.nota||'';
     fields();
     row.append(el('form'));el('form').hidden=false;
     button.setAttribute('aria-expanded','true');el('asistencia').focus();
   }
   function renderPeople(people,opened){
     const list=el('lista');list.replaceChildren();
-    const registered=people.filter(w=>w.registro).length;
-    el('avance').hidden=!people.length;
-    el('avance-texto').textContent=registered+' de '+people.length+' registrados';
-    el('avance-barra').max=people.length||1;
-    el('avance-barra').value=registered;
+    const expected=people.filter(counted);
+    const completed=expected.filter(registered).length;
+    el('avance').hidden=!expected.length;
+    el('avance-texto').textContent=completed+' de '+expected.length+' registrados';
+    el('avance-barra').max=expected.length||1;
+    el('avance-barra').value=completed;
     if(!people.length){list.textContent='Sin personal por turno registrado para esta fecha.';return;}
     const lastPositions = new Map(['Mecánico','Ayudante de mecánico 1','Ayudante de mecánico 2','Chequeador','Vigilante 1','Vigilante 2'].map((name,index)=>[name,index]));
     const ordered = [...people].sort((a,b)=>(lastPositions.get(a.nombre) ?? -1)-(lastPositions.get(b.nombre) ?? -1));
@@ -68,18 +95,23 @@
     const groups=['Choferes','Operadores','Mecánicos','Vigilancia']
       .map(name=>({name,members:ordered.filter(w=>(labels[w.cargo]||'Mecánicos')===name)}))
       .filter(group=>group.members.length)
-      .map(group=>({...group,pending:group.members.filter(w=>!w.registro).length}));
+      .map(group=>{
+        const scheduled=group.members.filter(counted);
+        return {...group,scheduled,pending:scheduled.filter(w=>!registered(w)).length};
+      });
     const initial=(groups.find(group=>group.pending)??groups[0]).name;
-    for(const {name,members,pending} of groups){
+    for(const {name,members,scheduled,pending} of groups){
       const block=document.createElement('details');
       block.className='nom-grupo-turno';block.dataset.grupo=name;
       block.open=opened?opened.has(name):name===initial;
       const heading=document.createElement('summary');
       const title=text('strong',name);
-      if(name==='Vigilancia'){
-        const guard=text('small','Guardia de 24 h');guard.className='nom-guardia';title.append(guard);
+      if(members.some(w=>w.guardia)){
+        const guard=text('small','Guardia de 24 h · Relevo a las 7:00 a. m.');guard.className='nom-guardia';title.append(guard);
       }
-      heading.append(title,text('span',pending===0?'Completo':pending+' por registrar'));
+      const review=scheduled.some(w=>w.guardia && guardStatus(w)==='Revisar turnos');
+      const progress=!scheduled.length?'Sin convocatoria':!pending?'Completo':review?'Por revisar':pending+' por registrar';
+      heading.append(title,text('span',progress));
       const roster=document.createElement('div');roster.className='nom-puestos';
       block.append(heading,roster);list.append(block);
       for(const w of members){
@@ -87,14 +119,24 @@
         const button=document.createElement('button');button.type='button';button.className='nom-puesto-boton';
         const label=text('span',nombrePuesto(w.nombre).replace(/^Chofer · /,''));
         label.className='nom-puesto-nombre';
-        if(w.registro?.autor){
-          const author=text('small','Registró: '+w.registro.autor);author.className='nom-puesto-meta';label.append(author);
+        const daily=w.guardia?.asignada;
+        const records=daily?guardRecords(w).filter(Boolean):[w.registro].filter(Boolean);
+        const previous=w.guardia && guardShifts.flatMap(turno=>{
+          const record=w.guardia.turnos[turno];
+          return record?[turno+': '+attendance(record)]:[];
+        });
+        let detail='';
+        if(previous?.length && (!daily || guardStatus(w)==='Revisar turnos'))detail=previous.join(' · ');
+        else if(records.length && records.every(r=>r.autor===records[0].autor))detail='Registró: '+records[0].autor;
+        if(detail){
+          const metadata=text('small',detail);metadata.className='nom-puesto-meta';label.append(metadata);
         }
-        const state=attendance(w.registro)||'Por registrar';
+        const state=w.guardia ? daily?guardStatus(w):'De descanso' : attendance(w.registro)||(offSchedule(w)?'No convocado':'Por registrar');
         const badge=text('span',state);badge.className='nom-asistencia-etiqueta';badge.dataset.estado=state;
         button.append(label,badge);
         button.setAttribute('aria-controls','nom-form');button.setAttribute('aria-expanded','false');
-        button.disabled=!!w.registro && !isBossAdmin(bossSession) && w.registro.autor!==bossSession.usuario;
+        button.disabled=(w.guardia && !daily && !w.registro) ||
+          (!isBossAdmin(bossSession) && records.some(r=>r.autor!==bossSession.usuario));
         button.onclick=()=>edit(w,row,button);
         row.append(button);roster.append(row);
       }
@@ -182,6 +224,7 @@
         ['Trabajó','turno trabajado','turnos trabajados'],
         ['Faltó','falta','faltas'],
         ['Permiso','permiso','permisos'],
+        ['No convocado','no convocado','no convocados'],
         ['Stand by','en stand by','en stand by'],
       ];
       const counts=totals.map(([status,singular,plural])=>{
@@ -206,7 +249,7 @@
         const line=document.createElement('div');
         line.className='nom-turno-dia';
         const estado=attendance(entry);
-        const value=row.fixed?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto);
+        const value=row.fixed && estado!=='No convocado'?'Incluido en el fijo quincenal':entry.monto==null?'Pendiente':money(entry.monto);
         line.append(text('span',entry.turno+' · '+estado),text('b',value));
         const notes=[
           normalizarEtiquetaUnidad(entry.equipo),
@@ -300,9 +343,19 @@
     }catch(err){if(session===bossSession){el('estado').textContent=err.message;el('estado').scrollIntoView({block:'center'});}}
     finally{btn.disabled=false;saving=false;}
   }
-  el('form').onsubmit=e=>save(e,{accion:'nomina_guardar',fecha:el('fecha').value,turno:shift(),persona:selected.id,
-    revision:selected.registro?.revision||0,estado:el('asistencia').value==='Stand by'?'Trabajó':el('asistencia').value,equipo:el('equipo').value,
-    condicion:el('condicion').value,decision:el('decision').value,nota:el('nota').value});
+  el('form').onsubmit=e=>{
+    const daily=selected.guardia?.asignada;
+    const body={fecha:el('fecha').value,persona:selected.id,
+      estado:el('asistencia').value==='Stand by'?'Trabajó':el('asistencia').value,nota:el('nota').value};
+    if(daily){
+      const revisiones=Object.fromEntries(guardShifts.map(turno=>[turno,selected.guardia.turnos[turno]?.revision||0]));
+      const [day,night]=guardRecords(selected);
+      const conservar_notas=!!(day && night && day.nota!==night.nota && !body.nota.trim());
+      return save(e,{...body,accion:'nomina_guardia',revisiones,conservar_notas});
+    }
+    return save(e,{...body,accion:'nomina_guardar',turno:shift(),revision:selected.registro?.revision||0,
+      equipo:el('equipo').value,condicion:el('condicion').value,decision:el('decision').value});
+  };
   el('alta').onsubmit=e=>save(e,{accion:'nomina_alta',fecha:el('ingreso').value,nombre:el('persona').value.trim(),cargo:el('cargo').value});
   el('fijo').onsubmit=e=>save(e,{accion:'nomina_sueldo',fecha:el('fecha').value,persona:el('supervisor').value,monto:el('monto').value});
   el('equipo').onchange=()=>{
