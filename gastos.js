@@ -1,6 +1,12 @@
 (() => {
 const by=id=>document.getElementById('gasto-'+id);
 const fmt=n=>new Intl.NumberFormat('es-VE',{style:'currency',currency:'USD'}).format(n);
+const dayLabel=new Intl.DateTimeFormat('es-VE',{day:'numeric',month:'short',timeZone:'UTC'});
+function text(tag,value){
+  const node=document.createElement(tag);
+  node.textContent=value;
+  return node;
+}
 let entries=[],version=0,pending=null,saving=false;
 let balance=null, paymentAttempt=null;
 const form=by('form');
@@ -59,12 +65,54 @@ function draw(){
     return group;
   }
   function detail(parent,items,showCategory=false){
-    for(const [day,concept,value,category,unit,payer] of items){
-      const line=document.createElement('small');
-      line.textContent=[display(day),concept,showCategory?category:unit,payer,fmt(value)].filter(Boolean).join(' · ');
-      parent.append(line);
+    if(!items.length){
+      parent.append(text('small','Sin gastos en este período.'));
+      return;
     }
-    if(!items.length)parent.append('Sin gastos en este período.');
+    const byDay=new Map();
+    for(const item of items){
+      const day=item[0];
+      if(!byDay.has(day))byDay.set(day,[]);
+      byDay.get(day).push(item);
+    }
+    const days=[...byDay.keys()].sort((a,b)=>b.localeCompare(a));
+    const list=document.createElement('div');
+    list.className='gasto-dias';
+    for(const day of days.slice(0,3))appendDay(list,day);
+    const older=days.slice(3);
+    if(older.length){
+      const previous=document.createElement('details');
+      previous.className='gasto-dias-anteriores';
+      previous.append(text('summary','Ver '+older.length+(older.length===1?' día anterior':' días anteriores')));
+      for(const day of older)appendDay(previous,day);
+      list.append(previous);
+    }
+    parent.append(list);
+
+    function appendDay(container,date){
+      const expenses=byDay.get(date);
+      const day=document.createElement('details');
+      day.className='gasto-dia';
+      const summary=document.createElement('summary'), label=document.createElement('span');
+      label.append(
+        text('strong',dayLabel.format(new Date(date+'T00:00:00Z'))),
+        text('small',expenses.length+(expenses.length===1?' gasto':' gastos'))
+      );
+      summary.append(label,text('strong',fmt(montoTotal(expenses))));
+      const lines=document.createElement('div');
+      lines.className='gasto-dia-movimientos';
+      for(const [,concept,value,category,unit,payer] of expenses){
+        const line=document.createElement('div'), description=document.createElement('div');
+        line.className='gasto-dia-movimiento';
+        description.append(text('span',concept));
+        const meta=[showCategory?category:unit,payer].filter(Boolean);
+        if(meta.length)description.append(text('small',meta.join(' · ')));
+        line.append(description,text('strong',fmt(value)));
+        lines.append(line);
+      }
+      day.append(summary,lines);
+      container.append(day);
+    }
   }
   const categories=section('Resumen por partida');
   for(const name of partidas){
