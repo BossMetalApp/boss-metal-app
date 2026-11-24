@@ -448,11 +448,9 @@ body.boss-authenticated #boss-login-screen{display:none}
 <div class="card"><details><summary><strong>Registrar trabajador</strong></summary><form id="nom-alta">
 <label for="nom-persona">Nombre y apellido</label><input id="nom-persona" maxlength="100" required>
 <label for="nom-cargo">Cargo</label><select id="nom-cargo"><option>Chofer</option><option>Operador</option><option>Mecánico</option><option>Ayudante de mecánico</option><option>Chequeador</option><option>Vigilante</option><option>Supervisor</option></select>
+<div id="nom-asignacion-grupo" hidden><label id="nom-asignacion-rotulo" for="nom-asignacion">Unidad asignada</label><select id="nom-asignacion"></select></div>
 <label for="nom-ingreso">Disponible desde</label><input id="nom-ingreso" type="date" required><button>Registrar trabajador</button></form></details></div>
-<div class="card"><details><summary><strong>Sueldos fijos de supervisores</strong></summary><form id="nom-fijo">
-<label for="nom-supervisor">Supervisor</label><select id="nom-supervisor" required></select>
-<label for="nom-monto">Sueldo por quincena (USD)</label><input id="nom-monto" type="number" step="0.01" min="0.01" required>
-<p id="nom-vigencia" class="muted"></p><button>Guardar sueldo</button></form></details></div></div>
+</div>
 </section><section id="graficas">
   <div class="card">
     <h2>Gráficas</h2>
@@ -1818,4 +1816,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos18"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=9"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos19"></script><script src="./gastos.js?v=12"></script><script src="./balance.js?v=10"></script><script src="./avisos.js?v=1"></script></body></html>

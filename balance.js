@@ -70,7 +70,8 @@
           const nombreEquipo = normalize(shift.equipo ?? '') || equipoHabitual;
           const id = unidadChofer ?? idUnidadEnEtiqueta(shift.equipo);
           const unidad = id ? rows.get('acarreo:' + id) : undefined;
-          const destino = unidad ?? equipment.get(nombreEquipo) ?? rows.get('destino:' + nombreEquipo) ?? general;
+          const asignado = shift.equipo ? undefined : rows.get(line.w.asignacion);
+          const destino = unidad ?? equipment.get(nombreEquipo) ?? rows.get('destino:' + nombreEquipo) ?? asignado ?? general;
           destino.gastos.push({fecha:shift.fecha, concepto:nombrePuesto(line.w.nombre) + ' · ' + shift.turno, monto:shift.monto, partida:'Nómina'});
         }
       }

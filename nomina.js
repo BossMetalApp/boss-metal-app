@@ -5,6 +5,27 @@
   const attendance = r => r?.estado === 'Trabajó' && r.condicion === 'Stand by' ? 'Stand by' : r?.estado;
   let selected=null, editorButton=null, visiblePeriod=null, report=null, equipment=[], version=0, saving=false;
   const shift = () => el('turno').querySelector(':checked').value;
+  function assignmentName(person){
+    if(person.asignacion?.startsWith('acarreo:')){
+      const id=person.asignacion.slice('acarreo:'.length);
+      return etiquetaUnidad(id,E.find(unit=>String(unit.id)===id)?.name);
+    }
+    return availabilityExtra.find(item=>item.clave===person.asignacion)?.nombre;
+  }
+  function updateAssignment(){
+    const cargo=el('cargo').value, driver=cargo==='Chofer';
+    const options=el('asignacion'), previous=options.value;
+    const required=driver || cargo==='Operador';
+    options.required=required;
+    options.disabled=!required;
+    el('asignacion-grupo').hidden=!required;
+    el('asignacion-rotulo').textContent=driver?'Unidad asignada':'Equipo asignado';
+    const assigned=driver
+      ? E.filter(unit=>unit.active!==false).map(unit=>new Option(etiquetaUnidad(unit.id,unit.name),'acarreo:'+unit.id))
+      : required ? availabilityExtra.map(item=>new Option(item.nombre,item.clave)) : [];
+    options.replaceChildren(new Option('Seleccionar',''),...assigned);
+    if(required && assigned.some(option=>option.value===previous))options.value=previous;
+  }
   const guardShifts=['Diurno','Nocturno'];
   const daytimeRoles=new Set(['Mecánico','Ayudante de mecánico','Chequeador']);
   const offSchedule=w=>shift()==='Nocturno' && daytimeRoles.has(w.cargo);
@@ -31,8 +52,8 @@
   window.resetNomina=()=>{
     version++;reportVersion++;payrollPeriod=null;el('periodo').value='quincena';el('dia-grupo').hidden=true;closeEditor();report=null;equipment=[];saving=false;
     visiblePeriod=null;el('admin').hidden=true;el('avance').hidden=true;
-    for(const id of ['lista','resumen','supervisor','maquinas','estado','vigencia']) el(id).replaceChildren();
-    el('alta').reset();el('fijo').reset();el('fecha').value='';
+    for(const id of ['lista','resumen','maquinas','estado']) el(id).replaceChildren();
+    el('alta').reset();updateAssignment();el('fecha').value='';
   };
   function fields(){
     const standby=el('asistencia').value==='Stand by';
@@ -79,9 +100,9 @@
     }else{
       options.value=attendance(r)||(offSchedule(w)?'No convocado':'');
     }
-    el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||'';
+    el('equipo').value=normalizarEtiquetaUnidad(r?.equipo)||assigned?.nombre||assignmentName(w)||'';
     el('condicion').value=r?.condicion||'';el('decision').value=r?.condicion==='Falla durante el turno'?(r.medio?'Medio':'Completo'):'';
-    if(fixed && !r?.condicion) el('equipo').onchange();
+    if(w.cargo==='Operador' && el('equipo').value && !r?.condicion)el('equipo').onchange();
     el('nota').value=daily && differentNotes?'':r?.nota||'';
     fields();
     row.append(el('form'));el('form').hidden=false;
@@ -126,6 +147,10 @@
         const button=document.createElement('button');button.type='button';button.className='nom-puesto-boton';
         const label=text('span',nombrePuesto(w.nombre).replace(/^Chofer · /,''));
         label.className='nom-puesto-nombre';
+        const assignment=assignmentName(w);
+        if(assignment){
+          const metadata=text('small',assignment);metadata.className='nom-puesto-meta';label.append(metadata);
+        }
         const daily=w.guardia?.asignada;
         const records=(w.guardia?guardRecords(w):[w.registro]).filter(Boolean);
         const previous=w.guardia && guardShifts.flatMap(turno=>{
@@ -298,6 +323,8 @@
       const block=document.createElement('details');
       block.append(heading(nombrePuesto(r.w.nombre),r.pay==null?r.pending:money(r.pay)));
       block.append(text('p',r.w.cargo+(r.fixed?(selectedDay()?' · Fijo prorrateado':' · Fijo quincenal'):' · Diurnos '+r.day+' · Nocturnos '+r.night+' · Faltas '+r.absent+' · Permisos '+r.permits)));
+      const assignment=assignmentName(r.w);
+      if(assignment)block.append(text('p',assignment));
       if(r.w.cargo==='Vigilante' && r.fixed)block.append(text('p','Base '+money(r.base)+' · Descuento por guardias '+money(r.deduction)));
       if(r.pending && r.pay!=null)block.append(text('p',r.pending));
       if(r.rows.length)block.append(renderPayrollDays(r));
@@ -331,8 +358,8 @@
       visiblePeriod=period;renderPeople(day.personal,opened);
       if(admin){
         payrollPeriod=summary;
-        el('supervisor').replaceChildren(new Option('Seleccionar',''),...summary.personal.filter(w=>w.cargo==='Supervisor').map(w=>new Option(w.nombre,w.id)));
-        el('vigencia').textContent='Vigente desde la quincena del '+summary.desde+'.';
+        updateAssignment();
+        if(!el('ingreso').value)el('ingreso').value=fecha;
         el('admin').hidden=false;refreshSummary();
       }
       el('estado').textContent=message;
@@ -362,8 +389,9 @@
     return save(e,{...body,accion:'nomina_guardar',turno:shift(),revision:selected.registro?.revision||0,
       equipo:el('equipo').value,condicion:el('condicion').value,decision:el('decision').value});
   };
-  el('alta').onsubmit=e=>save(e,{accion:'nomina_alta',fecha:el('ingreso').value,nombre:el('persona').value.trim(),cargo:el('cargo').value});
-  el('fijo').onsubmit=e=>save(e,{accion:'nomina_sueldo',fecha:el('fecha').value,persona:el('supervisor').value,monto:el('monto').value});
+  el('cargo').onchange=updateAssignment;
+  el('alta').onsubmit=e=>save(e,{accion:'nomina_alta',fecha:el('ingreso').value,nombre:el('persona').value.trim(),
+    cargo:el('cargo').value,asignacion:el('asignacion').disabled?null:el('asignacion').value});
   el('equipo').onchange=()=>{
     const known=equipment.find(x=>x.nombre===el('equipo').value);
     el('condicion').value=known?.estado==='Operativo'?'Operativa':known?.estado==='Fuera de servicio'?'Fuera de servicio':'';
