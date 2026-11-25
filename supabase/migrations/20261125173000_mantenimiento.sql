@@ -49,7 +49,7 @@ create or replace function public.boss_mantenimiento_rpc(p_actor text,p jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare
   accion text:=p->>'accion';
-  clave text:=nullif(p->>'equipo','');
+  clave_equipo text:=nullif(p->>'equipo','');
   nombre_equipo text:=btrim(coalesce(p->>'nombre',''));
   motivo text:=btrim(coalesce(p->>'falla',''));
   nota_evento text:=btrim(coalesce(p->>'nota',''));
@@ -67,7 +67,7 @@ begin
     and (u.rol='supervisor' or u.usuario in ('Admin','Admin2'))) then
     raise exception 'Acceso restringido.' using errcode='42501';
   end if;
-  if clave is not null and clave !~ '^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo))$' then
+  if clave_equipo is not null and clave_equipo !~ '^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo))$' then
     raise exception 'Selecciona un equipo válido.' using errcode='22023';
   end if;
   if accion='mantenimiento_listar' then
@@ -75,12 +75,12 @@ begin
     with ultimas as (
       select i.*
       from public.boss_mantenimiento i
-      where i.cerrado_en is not null and (clave is null or i.equipo=clave)
+      where i.cerrado_en is not null and (clave_equipo is null or i.equipo=clave_equipo)
       order by i.cerrado_en desc,i.id
       offset pagina limit 21
     ), lista as (
       select i.* from public.boss_mantenimiento i
-      where pagina=0 and i.cerrado_en is null and (clave is null or i.equipo=clave)
+      where pagina=0 and i.cerrado_en is null and (clave_equipo is null or i.equipo=clave_equipo)
       union all
       select * from ultimas
     )
@@ -98,13 +98,13 @@ begin
        from public.boss_disponibilidad_equipos d),'[]'::jsonb));
   end if;
 
-  if clave is null then raise exception 'Selecciona un equipo válido.' using errcode='22023'; end if;
+  if clave_equipo is null then raise exception 'Selecciona un equipo válido.' using errcode='22023'; end if;
   if accion='mantenimiento_solicitudes' then
     select coalesce(jsonb_agg(to_jsonb(s) order by s.creado_en desc,s.id),'[]'::jsonb) into filas
     from (
       select q.id,q.descripcion,q.estado,q.creado_en
       from public.boss_solicitudes_materiales q
-      where (('acarreo:'||q.unidad)=clave or q.equipo_adicional=case clave
+      where (('acarreo:'||q.unidad)=clave_equipo or q.equipo_adicional=case clave_equipo
         when 'equipo:d8r' then 'Bulldozer D8R' when 'equipo:hl770' then 'Payloader HL770' when 'equipo:jumbo' then 'Jumbo' end)
         and (buscar='' or strpos(lower(q.descripcion),lower(buscar))>0)
       order by q.creado_en desc,q.id limit 30
@@ -121,7 +121,7 @@ begin
       raise exception 'Indica el equipo y la falla.' using errcode='22023';
     end if;
     insert into public.boss_disponibilidad_equipos(clave,nombre,estado,actualizado_por)
-      values(clave,nombre_equipo,'Fuera de servicio',p_actor) on conflict on constraint boss_disponibilidad_equipos_pkey do nothing;
+      values(clave_equipo,nombre_equipo,'Fuera de servicio',p_actor) on conflict on constraint boss_disponibilidad_equipos_pkey do nothing;
     id_incidencia:=id_evento;
     evento:='Falla reportada';
     etapa_nueva:='Reportada';
@@ -136,7 +136,7 @@ begin
     etapa_nueva:=null;
   end if;
   -- Mantiene el mismo orden de bloqueo que la edición desde Disponibilidad.
-  perform 1 from public.boss_disponibilidad_equipos d where d.clave=clave for update;
+  perform 1 from public.boss_disponibilidad_equipos d where d.clave=clave_equipo for update;
   if not found then raise exception 'Equipo inválido.' using errcode='22023'; end if;
   if exists (select 1 from public.boss_mantenimiento_eventos e where e.id=id_evento
     and e.incidencia=id_incidencia and e.tipo=evento and e.actor=p_actor) then
@@ -144,27 +144,27 @@ begin
   end if;
   if id_solicitud is not null and (accion<>'mantenimiento_novedad' or not exists(
     select 1 from public.boss_solicitudes_materiales q where q.id=id_solicitud
-    and (('acarreo:'||q.unidad)=clave or q.equipo_adicional=case clave
+    and (('acarreo:'||q.unidad)=clave_equipo or q.equipo_adicional=case clave_equipo
       when 'equipo:d8r' then 'Bulldozer D8R' when 'equipo:hl770' then 'Payloader HL770' when 'equipo:jumbo' then 'Jumbo' end))) then
     raise exception 'La solicitud debe corresponder a este equipo.' using errcode='22023';
   end if;
   marca:=clock_timestamp();
   if accion='mantenimiento_reportar' then
-    if exists(select 1 from public.boss_mantenimiento i where i.equipo=clave and i.cerrado_en is null) then
+    if exists(select 1 from public.boss_mantenimiento i where i.equipo=clave_equipo and i.cerrado_en is null) then
       raise exception 'El equipo ya tiene una incidencia abierta. Agrega una novedad.' using errcode='22023';
     end if;
     insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en)
-      values(id_incidencia,clave,motivo,etapa_nueva,marca);
+      values(id_incidencia,clave_equipo,motivo,etapa_nueva,marca);
     update public.boss_disponibilidad_equipos d set estado='Fuera de servicio',actualizado_por=p_actor,actualizado_en=marca
-      where d.clave=clave and d.estado<>'Fuera de servicio';
+      where d.clave=clave_equipo and d.estado<>'Fuera de servicio';
   else
-    if not exists(select 1 from public.boss_mantenimiento i where i.id=id_incidencia and i.equipo=clave and i.cerrado_en is null) then
+    if not exists(select 1 from public.boss_mantenimiento i where i.id=id_incidencia and i.equipo=clave_equipo and i.cerrado_en is null) then
       raise exception 'La incidencia ya no está abierta. Actualiza la bitácora.' using errcode='22023';
     end if;
     if accion='mantenimiento_cerrar' then
       update public.boss_mantenimiento i set cerrado_en=greatest(marca,i.abierto_en) where i.id=id_incidencia;
       update public.boss_disponibilidad_equipos d set estado='Operativo',actualizado_por=p_actor,actualizado_en=marca
-        where d.clave=clave and d.estado<>'Operativo';
+        where d.clave=clave_equipo and d.estado<>'Operativo';
     elsif etapa_nueva is not null then
       update public.boss_mantenimiento i set etapa=etapa_nueva where i.id=id_incidencia;
     end if;
