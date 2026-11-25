@@ -1,3 +1,7 @@
+alter table public.boss_disponibilidad_equipos
+  drop constraint if exists boss_disponibilidad_equipos_clave_check,
+  add constraint boss_disponibilidad_equipos_clave_check check (clave ~ '^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo)|vehiculo:(x1|van-transporte|orinoco|mitsubishi-l200))$');
+
 create table if not exists public.boss_mantenimiento (
   id uuid primary key,
   equipo text not null references public.boss_disponibilidad_equipos(clave),
@@ -45,6 +49,25 @@ after update of estado on public.boss_disponibilidad_equipos
 for each row when (new.estado='Operativo' and new.estado is distinct from old.estado)
 execute function public.boss_mantenimiento_cierre_disponibilidad();
 
+create or replace function public.boss_mantenimiento_destino(p_unidad text,p_equipo text,p_vehiculo text)
+returns text language sql immutable set search_path=pg_catalog as $$
+  select case
+    when p_unidad is not null then 'acarreo:'||p_unidad
+    when p_equipo='Bulldozer D8R' then 'equipo:d8r'
+    when p_equipo='Payloader HL770' then 'equipo:hl770'
+    when p_equipo='Jumbo' then 'equipo:jumbo'
+    when p_equipo='Vehículo' then case regexp_replace(lower(coalesce(p_vehiculo,'')),'[^a-z0-9]','','g')
+      when 'x1' then 'vehiculo:x1'
+      when 'vantransporte' then 'vehiculo:van-transporte'
+      when 'vantrasporte' then 'vehiculo:van-transporte'
+      when 'orinoco' then 'vehiculo:orinoco'
+      when 'mitsubishil200' then 'vehiculo:mitsubishi-l200'
+      when 'l200' then 'vehiculo:mitsubishi-l200'
+    end
+  end;
+$$;
+revoke all on function public.boss_mantenimiento_destino(text,text,text) from public,anon,authenticated;
+
 create or replace function public.boss_mantenimiento_rpc(p_actor text,p jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare
@@ -67,7 +90,8 @@ begin
     and (u.rol='supervisor' or u.usuario in ('Admin','Admin2'))) then
     raise exception 'Acceso restringido.' using errcode='42501';
   end if;
-  if clave_equipo is not null and clave_equipo !~ '^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo))$' then
+  if clave_equipo is not null and clave_equipo !~ '^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo)|vehiculo:(x1|van-transporte|orinoco|mitsubishi-l200))$'
+     and not (accion='mantenimiento_listar' and clave_equipo='vehiculos') then
     raise exception 'Selecciona un equipo válido.' using errcode='22023';
   end if;
   if accion='mantenimiento_listar' then
@@ -75,12 +99,12 @@ begin
     with ultimas as (
       select i.*
       from public.boss_mantenimiento i
-      where i.cerrado_en is not null and (clave_equipo is null or i.equipo=clave_equipo)
+      where i.cerrado_en is not null and (clave_equipo is null or i.equipo=clave_equipo or (clave_equipo='vehiculos' and i.equipo like 'vehiculo:%'))
       order by i.cerrado_en desc,i.id
       offset pagina limit 21
     ), lista as (
       select i.* from public.boss_mantenimiento i
-      where pagina=0 and i.cerrado_en is null and (clave_equipo is null or i.equipo=clave_equipo)
+      where pagina=0 and i.cerrado_en is null and (clave_equipo is null or i.equipo=clave_equipo or (clave_equipo='vehiculos' and i.equipo like 'vehiculo:%'))
       union all
       select * from ultimas
     )
@@ -104,8 +128,7 @@ begin
     from (
       select q.id,q.descripcion,q.estado,q.creado_en
       from public.boss_solicitudes_materiales q
-      where (('acarreo:'||q.unidad)=clave_equipo or q.equipo_adicional=case clave_equipo
-        when 'equipo:d8r' then 'Bulldozer D8R' when 'equipo:hl770' then 'Payloader HL770' when 'equipo:jumbo' then 'Jumbo' end)
+      where public.boss_mantenimiento_destino(q.unidad,q.equipo_adicional,q.vehiculo)=clave_equipo
         and (buscar='' or strpos(lower(q.descripcion),lower(buscar))>0)
       order by q.creado_en desc,q.id limit 30
     ) s;
@@ -144,8 +167,7 @@ begin
   end if;
   if id_solicitud is not null and (accion<>'mantenimiento_novedad' or not exists(
     select 1 from public.boss_solicitudes_materiales q where q.id=id_solicitud
-    and (('acarreo:'||q.unidad)=clave_equipo or q.equipo_adicional=case clave_equipo
-      when 'equipo:d8r' then 'Bulldozer D8R' when 'equipo:hl770' then 'Payloader HL770' when 'equipo:jumbo' then 'Jumbo' end))) then
+    and public.boss_mantenimiento_destino(q.unidad,q.equipo_adicional,q.vehiculo)=clave_equipo)) then
     raise exception 'La solicitud debe corresponder a este equipo.' using errcode='22023';
   end if;
   marca:=clock_timestamp();
@@ -181,6 +203,7 @@ declare
   equipo text:='acarreo:MNT-'||substr(gen_random_uuid()::text,1,6);
   incidente uuid:=gen_random_uuid();
   solicitud_id uuid:=gen_random_uuid();
+  prueba_vehiculo uuid:=gen_random_uuid();
   datos jsonb;
   resultado jsonb;
 begin
@@ -208,6 +231,18 @@ begin
      or (select cerrado_en from public.boss_mantenimiento where id=incidente) is null then
     raise exception 'El cierre no quedó sincronizado';
   end if;
+  insert into public.boss_disponibilidad_equipos(clave,nombre,estado,actualizado_por)
+    values('vehiculo:van-transporte','Van Transporte','Operativo','Prueba')
+    on conflict on constraint boss_disponibilidad_equipos_pkey do nothing;
+  insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,cerrado_en)
+    values(prueba_vehiculo,'vehiculo:van-transporte','Prueba de vehículo','Reportada',now(),now());
+  select public.boss_mantenimiento_rpc('Admin','{"accion":"mantenimiento_listar","equipo":"vehiculos"}') into resultado;
+  if not exists (select 1 from jsonb_array_elements(resultado->'incidencias') i where i->>'id'=prueba_vehiculo::text)
+     or exists (select 1 from jsonb_array_elements(resultado->'incidencias') i where i->>'equipo' not like 'vehiculo:%')
+    then raise exception 'El filtro Vehículos no devuelve el historial de los vehículos'; end if;
+  if public.boss_mantenimiento_destino(null,'Vehículo','Van trasporte') is distinct from 'vehiculo:van-transporte'
+     or public.boss_mantenimiento_destino(null,'Vehículo','Mitsubishi L-200') is distinct from 'vehiculo:mitsubishi-l200'
+    then raise exception 'No se reconocieron los alias de solicitudes de vehículos'; end if;
   raise exception using errcode='ZX002',message='Revertir datos de prueba de mantenimiento';
 exception when sqlstate 'ZX002' then null;
 end $test$;

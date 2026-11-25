@@ -253,7 +253,7 @@ Deno.serve(async (req) => {
 
       const clave = body.clave;
       const nombre = typeof body.nombre === "string" ? body.nombre.trim() : "";
-      if (typeof clave !== "string" || !/^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo))$/.test(clave) ||
+      if (typeof clave !== "string" || !/^(acarreo:[A-Za-z0-9-]{1,12}|equipo:(d8r|hl770|jumbo)|vehiculo:(x1|van-transporte|orinoco|mitsubishi-l200))$/.test(clave) ||
           !nombre || nombre.length > 100 || !["Operativo", "Fuera de servicio"].includes(body.estado)) {
         return reply({ ok: false, mensaje: "Revisa el equipo y su estado" }, 400);
       }
