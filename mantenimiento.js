@@ -6,6 +6,9 @@
     dateStyle:'medium',timeStyle:'short',timeZone:'America/Caracas',
   });
   const stamp = value => time.format(new Date(value));
+  const dateLabel = value => value.split('-').reverse().join('/');
+  const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas'}).format(new Date());
+  const meterUnit = key => key.startsWith('equipo:') ? 'h' : 'km';
   const form = el('form'), fields = form.elements;
   const filter = el('filtro');
   const pageSize = 20;
@@ -82,6 +85,14 @@
     return content;
   }
 
+  function serviceDetails(incident, node) {
+    if (!incident.preventivo) return;
+    const parts = ['Preventivo',dateLabel(incident.fecha_servicio)];
+    if (incident.lectura!==null) parts.push(incident.lectura+' '+meterUnit(incident.equipo));
+    if (incident.proxima_revision) parts.push('Próxima revisión '+dateLabel(incident.proxima_revision));
+    node.append(text('p',parts.join(' · ')));
+  }
+
   function drawOpen(incidents) {
     const box = el('abiertas');
     box.replaceChildren();
@@ -91,17 +102,22 @@
       card.className = 'card mant-incidencia';
       const heading = document.createElement('div');
       heading.className = 'mant-fila';
-      const unavailable = text('span','Fuera de servicio');
-      unavailable.className = 'mant-badge mant-fuera';
+      const unavailable = text('span',incident.preventivo?'En mantenimiento':'Fuera de servicio');
+      unavailable.className = 'mant-badge '+(incident.preventivo?'mant-etapa':'mant-fuera');
       heading.append(text('h3',equipmentName(incident.equipo,incident.nombre)),unavailable);
-      const stage = text('span',incident.etapa);
+      const stage = text('span',incident.pendiente_detalle?'Pendiente de completar':incident.etapa);
       stage.className = 'mant-badge mant-etapa';
-      const update = button('Agregar novedad',() => showForm('novedad',incident));
+      const update = incident.pendiente_detalle
+        ? button('Completar incidencia',() => showForm('reportar',incident))
+        : button('Agregar novedad',() => showForm('novedad',incident));
       update.className = 'secondary';
       const actions = document.createElement('div');
       actions.className = 'actions';
       actions.append(update,button('Marcar operativo',() => showForm('cerrar',incident)));
-      card.append(heading,text('h4',incident.falla),text('p','Desde el '+stamp(incident.abierto_en)),stage,timeline(incident,true),actions);
+      card.append(heading,text('h4',incident.falla),text('p','Desde el '+stamp(incident.abierto_en)));
+      if (incident.preventivo) serviceDetails(incident,card);
+      if (!incident.preventivo || incident.etapa!=='Reportada') card.append(stage);
+      card.append(timeline(incident,true),actions);
       box.append(card);
     }
   }
@@ -115,11 +131,16 @@
       card.className = 'mant-reparacion';
       const heading = document.createElement('summary');
       const label = document.createElement('span');
-      label.append(text('strong',equipmentName(incident.equipo,incident.nombre)),text('small',incident.falla));
-      heading.append(label,text('small',stamp(incident.cerrado_en)));
-      card.append(heading,
-        text('p','Desde '+stamp(incident.abierto_en)+' · Fuera de servicio '+elapsed(incident.abierto_en,new Date(incident.cerrado_en))),
-        timeline(incident,false));
+      label.append(text('strong',equipmentName(incident.equipo,incident.nombre)),
+        text('small',(incident.preventivo?'Preventivo · ':'')+incident.falla));
+      heading.append(label,text('small',incident.preventivo?dateLabel(incident.fecha_servicio):stamp(incident.cerrado_en)));
+      card.append(heading);
+      serviceDetails(incident,card);
+      if (!incident.preventivo || incident.cerrado_en!==incident.abierto_en) {
+        const kind = incident.preventivo?'En mantenimiento':'Fuera de servicio';
+        card.append(text('p','Desde '+stamp(incident.abierto_en)+' · '+kind+' '+elapsed(incident.abierto_en,new Date(incident.cerrado_en))));
+      }
+      card.append(timeline(incident,false));
       box.append(card);
     }
   }
@@ -185,21 +206,39 @@
     closeForm();
     mode = action;
     selected = incident;
-    const reporting = mode==='reportar', updating = mode==='novedad';
+    const reporting = mode==='reportar', updating = mode==='novedad', preventive = mode==='preventivo';
+    const creating = reporting || preventive;
     fields.equipo.replaceChildren(new Option('Seleccionar',''),...equipmentOptions());
-    fields.equipo.value = equipment.has(filter.value) ? filter.value : '';
-    fields.equipo.required = fields.falla.required = reporting;
-    el('falla-campos').hidden = !reporting;
+    fields.equipo.value = incident?.equipo ?? (equipment.has(filter.value) ? filter.value : '');
+    fields.equipo.required = creating && !incident;
+    fields.falla.required = creating;
+    fields.fecha_servicio.required = preventive;
+    el('equipo-campo').hidden = !!incident;
+    el('falla-rotulo').textContent = preventive?'Trabajo realizado':'Falla';
+    el('falla-campos').hidden = !creating;
+    el('preventivo-campos').hidden = !preventive;
     el('novedad-campos').hidden = !updating;
+    if (preventive) {
+      fields.fecha_servicio.value = fields.fecha_servicio.max = today();
+      updateMeter();
+    }
     fields.solicitud.replaceChildren(new Option('Sin vincular',''));
-    const title = reporting ? 'Reportar falla' : updating ? 'Agregar novedad' : 'Marcar operativo';
+    const title = preventive ? 'Registrar mantenimiento preventivo'
+      : reporting ? (incident?'Completar incidencia':'Reportar falla')
+      : updating ? 'Agregar novedad' : 'Marcar operativo';
     el('form-titulo').textContent = title;
-    el('form-equipo').textContent = incident ? equipmentName(incident.equipo,incident.nombre)+' · '+incident.falla : '';
+    el('form-equipo').textContent = incident ? equipmentName(incident.equipo,incident.nombre) : '';
     el('guardar').textContent = mode==='cerrar' ? 'Marcar operativo' : 'Guardar';
     form.hidden = false;
     if (updating) loadRequests();
-    (reporting ? fields.equipo : fields.nota).focus();
+    (creating ? (incident?fields.falla:fields.equipo) : fields.nota).focus();
   }
+
+  function updateMeter() {
+    const key = fields.equipo.value;
+    el('medidor-rotulo').textContent = key && meterUnit(key)==='h'?'Horómetro (h)':'Kilometraje (km)';
+  }
+  fields.equipo.onchange = updateMeter;
 
   form.onsubmit = async event => {
     event.preventDefault();
@@ -207,8 +246,13 @@
     if (!session || !mode || saving) return;
     const action = mode;
     const body = {accion:'mantenimiento_'+action,equipo:selected?.equipo ?? fields.equipo.value,nota:fields.nota.value.trim()};
-    if (action==='reportar') Object.assign(body,{nombre:equipment.get(body.equipo),falla:fields.falla.value.trim()});
-    else body.incidencia = selected.id;
+    if (action==='reportar' || action==='preventivo') {
+      Object.assign(body,{nombre:equipment.get(body.equipo),falla:fields.falla.value.trim()});
+    } else body.incidencia = selected.id;
+    if (action==='preventivo') {
+      Object.assign(body,{fecha_servicio:fields.fecha_servicio.value,lectura:fields.lectura.value || null,
+        proxima_revision:fields.proxima_revision.value || null,detener:fields.detener.checked});
+    }
     if (action==='novedad') Object.assign(body,{etapa:fields.etapa.value,solicitud:fields.solicitud.value || null});
     if (action==='novedad' && !body.nota && !body.etapa && !body.solicitud) {
       el('form-estado').textContent = 'Indica una novedad, un estado o una solicitud.';
@@ -224,7 +268,9 @@
       await requestProduction(session,{...body,id:attempt.id});
       if (session!==bossSession) return;
       closeForm();
-      await load(action==='cerrar'?'Incidencia cerrada. Equipo operativo.':action==='reportar'?'Falla registrada.':'Novedad guardada.');
+      const messages={cerrar:'Registro cerrado. Equipo operativo.',reportar:'Falla registrada.',
+        preventivo:'Mantenimiento preventivo registrado.',novedad:'Novedad guardada.'};
+      await load(messages[action]);
     } catch (error) {
       if (session===bossSession) el('form-estado').textContent = error.message;
     } finally {
@@ -247,6 +293,7 @@
     return load();
   };
   el('reportar').onclick = () => showForm('reportar');
+  el('preventivo').onclick = () => showForm('preventivo');
   el('cancelar').onclick = () => {if (!saving) closeForm();};
   el('mas').onclick = () => load('',true);
   window.abrirMantenimiento = () => {

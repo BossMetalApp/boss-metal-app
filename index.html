@@ -246,6 +246,9 @@ body.boss-authenticated #boss-login-screen{display:none}
 #mantenimiento .mant-reparacion summary>span small{display:block}
 #mantenimiento summary{min-height:44px;padding:6px 0;cursor:pointer}
 #mantenimiento form{margin-top:10px;border-top:1px solid #d8e2eb;padding-top:8px}
+#mantenimiento .mant-detener{display:flex;align-items:center;gap:8px}
+#mantenimiento .mant-detener input{width:auto}
+#mantenimiento #mant-preventivo{margin-top:8px}
 #mantenimiento textarea{width:100%;font:inherit;border:1px solid #c6d4dd;border-radius:8px;padding:8px}
 #gastos .gasto-saldo-pendiente,#gastos .gasto-mov-reposicion{display:block;border-left:4px solid;padding:10px 12px;border-radius:6px;overflow-wrap:anywhere}
 #gastos .gasto-saldo-pendiente{margin-bottom:8px;background:#eef3f7;color:#17324a;border-color:#647b90;font-size:1.1rem}
@@ -545,13 +548,22 @@ body.boss-authenticated #boss-login-screen{display:none}
       <select id="mant-filtro" aria-label="Filtrar por equipo"><option value="">Todos los equipos</option></select>
       <button id="mant-reportar" type="button">+ Reportar falla</button>
     </div>
+    <button id="mant-preventivo" type="button" class="secondary">+ Registrar mantenimiento preventivo</button>
     <p id="mant-estado" role="status"></p>
     <form id="mant-form" hidden>
       <h3 id="mant-form-titulo"></h3>
       <p id="mant-form-equipo"></p>
       <div id="mant-falla-campos" hidden>
-        <label>Equipo<select name="equipo"></select></label>
-        <label>Falla<input name="falla" maxlength="120"></label>
+        <label id="mant-equipo-campo">Equipo<select name="equipo"></select></label>
+        <label><span id="mant-falla-rotulo">Falla</span><input name="falla" maxlength="120"></label>
+      </div>
+      <div id="mant-preventivo-campos" hidden>
+        <div class="two">
+          <label>Fecha del mantenimiento<input type="date" name="fecha_servicio"></label>
+          <label><span id="mant-medidor-rotulo">Kilometraje (km)</span><input type="number" name="lectura" min="0" step="0.01" placeholder="Opcional"></label>
+        </div>
+        <label>Próxima revisión (opcional)<input type="date" name="proxima_revision"></label>
+        <label class="mant-detener"><input type="checkbox" name="detener"> Dejar el equipo en mantenimiento</label>
       </div>
       <div id="mant-novedad-campos" hidden>
         <label>Estado de la reparación<select name="etapa"><option value="">Mantener estado</option><option>Esperando repuesto</option><option>En reparación</option></select></label>
@@ -1478,7 +1490,7 @@ function renderAvailability(reported) {
       ? etiquetaUnidad(item.clave.slice(8),item.nombre) : item.nombre;
     const state = document.createElement('span');
     state.textContent = item.estado || 'Sin reportar';
-    state.style.color = item.estado === 'Operativo' ? '#17653c' : item.estado === 'Fuera de servicio' ? '#a42626' : '#516373';
+    state.style.color = item.estado === 'Operativo' ? '#17653c' : item.estado === 'Fuera de servicio' ? '#a42626' : item.estado === 'En mantenimiento' ? '#805000' : '#516373';
     summary.append(title,state);
     card.append(summary);
     if (item.actualizado_en) {
@@ -1992,4 +2004,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos19"></script><script src="./gastos.js?v=14"></script><script src="./mantenimiento.js?v=2"></script><script src="./cortes.js?v=1"></script><script src="./balance.js?v=11"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos19"></script><script src="./gastos.js?v=14"></script><script src="./mantenimiento.js?v=3"></script><script src="./cortes.js?v=1"></script><script src="./balance.js?v=11"></script><script src="./avisos.js?v=1"></script></body></html>
