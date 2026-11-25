@@ -1,5 +1,5 @@
-const CACHE = 'bossmetal-v50';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx?v=3', './avisos.js?v=1', './nomina.js?v=gastos19','./gastos.js?v=14', './balance.js?v=10', './excel-corporativo.js?v=3'];
+const CACHE = 'bossmetal-v51';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './boss-metal-icon-180.png', './boss-metal-icon-192.png', './boss-metal-icon-512.png', './plantilla.xlsx?v=3', './avisos.js?v=1', './nomina.js?v=gastos19','./gastos.js?v=14', './cortes.js?v=1', './balance.js?v=11', './excel-corporativo.js?v=3'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4', 'bossmetal-v5', 'bossmetal-v6', 'bossmetal-v7', 'bossmetal-v8', 'bossmetal-v9', 'bossmetal-v10', 'bossmetal-v11', 'bossmetal-v12', 'bossmetal-v13', 'bossmetal-v14','bossmetal-v15','bossmetal-v16','bossmetal-v17','bossmetal-v18','bossmetal-v19','bossmetal-v20','bossmetal-v21','bossmetal-v22','bossmetal-v23','bossmetal-v24','bossmetal-v25','bossmetal-v26','bossmetal-v27','bossmetal-v28','bossmetal-v29','bossmetal-v30','bossmetal-v31','bossmetal-v32','bossmetal-v33','bossmetal-v34','bossmetal-v35','bossmetal-v36','bossmetal-v37','bossmetal-v38','bossmetal-v39','bossmetal-v40','bossmetal-v41','bossmetal-v42','bossmetal-v43','bossmetal-v44','bossmetal-v45','bossmetal-v46','bossmetal-v47','bossmetal-v48','bossmetal-v49'].map(name => caches.delete(name)))
+    Promise.all(['bossmetal-v1', 'bossmetal-v2', 'bossmetal-v3', 'bossmetal-v4', 'bossmetal-v5', 'bossmetal-v6', 'bossmetal-v7', 'bossmetal-v8', 'bossmetal-v9', 'bossmetal-v10', 'bossmetal-v11', 'bossmetal-v12', 'bossmetal-v13', 'bossmetal-v14','bossmetal-v15','bossmetal-v16','bossmetal-v17','bossmetal-v18','bossmetal-v19','bossmetal-v20','bossmetal-v21','bossmetal-v22','bossmetal-v23','bossmetal-v24','bossmetal-v25','bossmetal-v26','bossmetal-v27','bossmetal-v28','bossmetal-v29','bossmetal-v30','bossmetal-v31','bossmetal-v32','bossmetal-v33','bossmetal-v34','bossmetal-v35','bossmetal-v36','bossmetal-v37','bossmetal-v38','bossmetal-v39','bossmetal-v40','bossmetal-v41','bossmetal-v42','bossmetal-v43','bossmetal-v44','bossmetal-v45','bossmetal-v46','bossmetal-v47','bossmetal-v48','bossmetal-v49','bossmetal-v50'].map(name => caches.delete(name)))
       .then(() => self.clients.claim())
   );
 });

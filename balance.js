@@ -271,10 +271,11 @@
 
   window.abrirBalanceProduccion = () => {
     el('modo').value = 'Mensual';
-    return load();
+    return window.actualizarBalanceProduccion();
   };
-  window.actualizarBalanceProduccion = () => load();
+  window.actualizarBalanceProduccion = () => Promise.all([load(),window.cargarCortesAcarreo()]);
   window.resetBalanceProduccion = () => {
+    window.resetCortesAcarreo();
     sequence++;
     attempt = null;
     form.reset();

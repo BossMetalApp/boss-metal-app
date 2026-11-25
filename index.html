@@ -271,6 +271,18 @@ body.boss-authenticated #boss-login-screen{display:none}
 #balance-produccion .balance-cuadro .balance-positivo{color:#17634d}
 #balance-produccion .balance-cuadro .balance-negativo{color:#a42626}
 #balance-produccion #balance-form{margin-top:12px}
+#balance-produccion .cortes-card h2{margin:0 0 8px}
+#balance-produccion .cortes-tabla .balance-unidad{font-size:inherit}
+#balance-produccion .cortes-tabla tbody .balance-resumen td:last-child.cortes-pendiente,#balance-produccion .cortes-pendiente{background:#fff1cf;color:#693c00}
+#balance-produccion .cortes-tabla tbody .balance-resumen td:last-child.cortes-pagado,#balance-produccion .cortes-pagado{background:#e1f3e7;color:#165437}
+#balance-produccion .cortes-tabla small{display:inline-block;padding:2px 4px;border-radius:5px;font-weight:650;margin-bottom:4px}
+#balance-produccion .cortes-tabla dl{display:grid;grid-template-columns:1fr auto;gap:5px 8px;margin:4px 0 10px}
+#balance-produccion .cortes-tabla dd{margin:0;text-align:right;font-weight:650}
+#balance-produccion .cortes-tabla .balance-detalle p{margin:5px 0}
+#balance-produccion .cortes-form{border-top:1px solid #d8e2eb;margin-top:12px;padding-top:8px}
+#balance-produccion .cortes-form h3{margin:4px 0 8px}
+#balance-produccion #cortes-agregar{margin-top:10px;background:#14664d}
+
 @media(max-width:600px){
   #balance-produccion>.card{padding-inline:10px}
   #balance-produccion .balance-cuadro{font-size:clamp(.65rem,3.12vw,.81rem)}
@@ -413,6 +425,50 @@ body.boss-authenticated #boss-login-screen{display:none}
         <tfoot role="rowgroup"><tr id="balance-totales" class="balance-resumen" role="row"></tr></tfoot>
       </table>
     </div>
+  </div>
+  <div class="card cortes-card">
+    <h2>Cortes de acarreo</h2>
+    <p id="cortes-estado" role="status"></p>
+    <table id="cortes-tabla" class="balance-cuadro cortes-tabla" aria-label="Cortes de acarreo y saldos" hidden>
+      <caption>Montos en USD</caption>
+      <colgroup><col><col><col><col></colgroup>
+      <thead><tr><th scope="col">Período</th><th scope="col">Importe</th><th scope="col">Abonos</th><th scope="col">Pendiente</th></tr></thead>
+      <tbody id="cortes-filas"></tbody>
+    </table>
+    <button type="button" id="cortes-agregar">+ Nuevo corte</button>
+    <form id="cortes-nuevo" class="cortes-form" hidden>
+      <h3>Nuevo corte</h3>
+      <div class="two">
+        <label>Desde<input name="desde" type="date" required></label>
+        <label>Hasta<input name="hasta" type="date" required></label>
+      </div>
+      <button id="cortes-consultar" type="button" class="secondary">Consultar toneladas</button>
+      <div id="cortes-cierre" hidden>
+        <p>Toneladas registradas · <strong id="cortes-registradas"></strong></p>
+        <div class="two">
+          <label>Toneladas aprobadas<input name="aprobadas" inputmode="decimal"></label>
+          <label>Tarifa en USD por Ton<input name="tarifa" inputmode="decimal"></label>
+        </div>
+        <label>Observación (obligatoria si ajustas las toneladas)<input name="observacion" maxlength="300"></label>
+        <p><strong id="cortes-importe"></strong></p>
+        <button type="submit">Cerrar corte</button>
+      </div>
+      <button id="cortes-cancelar-corte" type="button" class="secondary">Cancelar</button>
+      <p id="cortes-consulta" role="status"></p>
+    </form>
+    <form id="cortes-abono" class="cortes-form" hidden>
+      <h3>Registrar abono</h3>
+      <p id="cortes-abono-periodo"></p>
+      <input type="hidden" name="corte">
+      <div class="two">
+        <label>Fecha del abono<input name="fecha" type="date" required></label>
+        <label>Monto en USD<input name="monto" inputmode="decimal" required></label>
+      </div>
+      <label>Referencia o medio de pago (opcional)<input name="referencia" maxlength="160"></label>
+      <button type="submit">Guardar abono</button>
+      <button id="cortes-cancelar-abono" type="button" class="secondary">Cancelar</button>
+      <p id="cortes-abono-estado" role="status"></p>
+    </form>
   </div>
 </section><section id="usuarios"><div class="card">
   <h2>Supervisores</h2>
@@ -1883,4 +1939,4 @@ graphPeriod.onchange = () => {
   });
 })();
 
-if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos19"></script><script src="./gastos.js?v=14"></script><script src="./balance.js?v=10"></script><script src="./avisos.js?v=1"></script></body></html>
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});</script><script src="./nomina.js?v=gastos19"></script><script src="./gastos.js?v=14"></script><script src="./cortes.js?v=1"></script><script src="./balance.js?v=11"></script><script src="./avisos.js?v=1"></script></body></html>
