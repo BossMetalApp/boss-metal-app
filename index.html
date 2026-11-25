@@ -232,7 +232,7 @@ body.boss-authenticated #boss-login-screen{display:none}
 #mantenimiento .mant-fila{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 #mantenimiento .mant-filtros select{flex:1 1 145px;width:auto;min-width:0;font-size:16px}
 #mantenimiento button{min-height:44px}
-#mantenimiento #mant-reportar,#mantenimiento .actions button:not(.secondary){background:#14664d}
+#mantenimiento .mant-accion-principal,#mantenimiento .actions button:not(.secondary){background:#14664d}
 #mantenimiento .mant-incidencia h3,#mantenimiento .mant-incidencia h4{margin:4px 0}
 #mantenimiento .mant-incidencia p{margin:4px 0}
 #mantenimiento .mant-badge{padding:4px 7px;border-radius:6px;font-size:.79rem;font-weight:650}
@@ -546,9 +546,9 @@ body.boss-authenticated #boss-login-screen{display:none}
     <h2>Incidencias abiertas</h2>
     <div class="mant-fila mant-filtros">
       <select id="mant-filtro" aria-label="Filtrar por equipo"><option value="">Todos los equipos</option></select>
-      <button id="mant-reportar" type="button">+ Reportar falla</button>
+      <button id="mant-reportar" class="mant-accion-principal" type="button">+ Reportar falla</button>
     </div>
-    <button id="mant-preventivo" type="button" class="secondary">+ Registrar mantenimiento preventivo</button>
+    <button id="mant-preventivo" class="mant-accion-principal" type="button">+ Registrar mantenimiento preventivo</button>
     <p id="mant-estado" role="status"></p>
     <form id="mant-form" hidden>
       <h3 id="mant-form-titulo"></h3>
