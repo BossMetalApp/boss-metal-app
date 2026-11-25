@@ -9,6 +9,12 @@
   const form = el('form'), fields = form.elements;
   const filter = el('filtro');
   const pageSize = 20;
+  const vehicles = [
+    ['vehiculo:x1','X1'],
+    ['vehiculo:van-transporte','Van Transporte'],
+    ['vehiculo:orinoco','Orinoco'],
+    ['vehiculo:mitsubishi-l200','Mitsubishi L200'],
+  ];
   let selected, mode, request = 0, lookup = 0, timer, attempt, saving = false, offset = null;
   let equipment = new Map();
 
@@ -17,6 +23,7 @@
       ...[...DEFAULT_E,...E].map(item => ['acarreo:'+item.id,item.name]),
       ...availabilityExtra.map(item => [item.clave,item.nombre]),
       ...reported.map(item => [item.clave,item.nombre]),
+      ...vehicles,
     ]);
   }
 
@@ -24,11 +31,23 @@
     return key.startsWith('acarreo:') ? etiquetaUnidad(key.slice(8),name) : name;
   }
 
+  function equipmentOptions(includeGroup=false) {
+    const options = [];
+    const group = document.createElement('optgroup');
+    group.label = 'Vehículos';
+    if (includeGroup) group.append(new Option('Todos los vehículos','vehiculos'));
+    for (const [key,name] of equipment) {
+      const option = new Option(equipmentName(key,name),key);
+      if (key.startsWith('vehiculo:')) group.append(option);
+      else options.push(option);
+    }
+    return [...options,group];
+  }
+
   function fillEquipment() {
-    const options = [...equipment].map(([key,name]) => new Option(equipmentName(key,name),key));
     const current = filter.value;
-    filter.replaceChildren(new Option('Todos los equipos',''),...options);
-    filter.value = equipment.has(current) ? current : '';
+    filter.replaceChildren(new Option('Todos los equipos',''),...equipmentOptions(true));
+    filter.value = current==='vehiculos' || equipment.has(current) ? current : '';
   }
 
   function elapsed(start, end) {
@@ -167,9 +186,8 @@
     mode = action;
     selected = incident;
     const reporting = mode==='reportar', updating = mode==='novedad';
-    fields.equipo.replaceChildren(new Option('Seleccionar',''),...[...equipment].map(([key,name]) =>
-      new Option(equipmentName(key,name),key)));
-    fields.equipo.value = filter.value;
+    fields.equipo.replaceChildren(new Option('Seleccionar',''),...equipmentOptions());
+    fields.equipo.value = equipment.has(filter.value) ? filter.value : '';
     fields.equipo.required = fields.falla.required = reporting;
     el('falla-campos').hidden = !reporting;
     el('novedad-campos').hidden = !updating;
