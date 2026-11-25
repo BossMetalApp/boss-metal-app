@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
       return reply({ok:true});
     }
 
-    if (["mantenimiento_listar", "mantenimiento_solicitudes", "mantenimiento_reportar",
+    if (["mantenimiento_listar", "mantenimiento_solicitudes", "mantenimiento_reportar", "mantenimiento_preventivo",
          "mantenimiento_novedad", "mantenimiento_cerrar"].includes(body?.accion)) {
       etapa = "mantenimiento";
       const {data,error} = await db.rpc("boss_mantenimiento_rpc",{p_actor:account.usuario,p:body});
@@ -263,6 +263,7 @@ Deno.serve(async (req) => {
         actualizado_por: account.usuario,
         actualizado_en: new Date().toISOString(),
       }, { onConflict: "clave" }).select(columns).single();
+      if (error?.code === "22023") return reply({ok:false,mensaje:error.message},400);
       if (error) throw error;
       return reply({ ok: true, equipo: data });
     }

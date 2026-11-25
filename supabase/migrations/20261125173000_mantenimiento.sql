@@ -11,6 +11,17 @@ create table if not exists public.boss_mantenimiento (
   cerrado_en timestamptz,
   check (cerrado_en is null or cerrado_en>=abierto_en)
 );
+alter table public.boss_disponibilidad_equipos
+  drop constraint if exists boss_disponibilidad_equipos_estado_check,
+  add constraint boss_disponibilidad_equipos_estado_check check (estado in ('Operativo','Fuera de servicio','En mantenimiento'));
+
+alter table public.boss_mantenimiento
+  add column if not exists pendiente_detalle boolean not null default false,
+  add column if not exists preventivo boolean not null default false,
+  add column if not exists fecha_servicio date,
+  add column if not exists lectura numeric(12,2),
+  add column if not exists proxima_revision date;
+
 create unique index if not exists boss_mantenimiento_abierta on public.boss_mantenimiento(equipo) where cerrado_en is null;
 create index if not exists boss_mantenimiento_historial on public.boss_mantenimiento(equipo,cerrado_en desc);
 
@@ -24,10 +35,47 @@ create table if not exists public.boss_mantenimiento_eventos (
   actor text not null,
   fecha timestamptz not null default now()
 );
+alter table public.boss_mantenimiento_eventos
+  drop constraint if exists boss_mantenimiento_eventos_tipo_check,
+  add constraint boss_mantenimiento_eventos_tipo_check check (tipo in ('Falla reportada','Novedad','Operativo','Preventivo'));
+
 create index if not exists boss_mantenimiento_eventos_incidencia on public.boss_mantenimiento_eventos(incidencia,fecha desc);
 alter table public.boss_mantenimiento enable row level security;
 alter table public.boss_mantenimiento_eventos enable row level security;
 revoke all on public.boss_mantenimiento,public.boss_mantenimiento_eventos from public,anon,authenticated,service_role;
+
+with pendientes as (
+  insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,pendiente_detalle)
+  select gen_random_uuid(),d.clave,'Falla pendiente de describir','Reportada',d.actualizado_en,true
+  from public.boss_disponibilidad_equipos d where d.estado='Fuera de servicio'
+  on conflict (equipo) where cerrado_en is null do nothing
+  returning id,equipo,abierto_en
+)
+insert into public.boss_mantenimiento_eventos(id,incidencia,tipo,nota,actor,fecha)
+select gen_random_uuid(),p.id,'Novedad','Fuera de servicio según Disponibilidad de equipos.',d.actualizado_por,p.abierto_en
+from pendientes p join public.boss_disponibilidad_equipos d on d.clave=p.equipo;
+
+create or replace function public.boss_mantenimiento_abrir_disponibilidad()
+returns trigger language plpgsql security definer set search_path=pg_catalog as $$
+declare nuevo_id uuid;
+begin
+  if exists (select 1 from public.boss_mantenimiento where equipo=new.clave and cerrado_en is null and preventivo) then
+    raise exception 'Finaliza el mantenimiento preventivo antes de reportar una falla.' using errcode='22023';
+  end if;
+  insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,pendiente_detalle)
+    values(gen_random_uuid(),new.clave,'Falla pendiente de describir','Reportada',new.actualizado_en,true)
+    on conflict (equipo) where cerrado_en is null do nothing returning id into nuevo_id;
+  if found then
+    insert into public.boss_mantenimiento_eventos(id,incidencia,tipo,nota,actor,fecha)
+      values(gen_random_uuid(),nuevo_id,'Novedad','Fuera de servicio según Disponibilidad de equipos.',new.actualizado_por,new.actualizado_en);
+  end if;
+  return new;
+end $$;
+revoke all on function public.boss_mantenimiento_abrir_disponibilidad() from public,anon,authenticated;
+create or replace trigger boss_mantenimiento_al_quedar_fuera
+after insert or update of estado on public.boss_disponibilidad_equipos
+for each row when (new.estado='Fuera de servicio')
+execute function public.boss_mantenimiento_abrir_disponibilidad();
 
 create or replace function public.boss_mantenimiento_cierre_disponibilidad()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
@@ -82,6 +130,11 @@ declare
   id_incidencia uuid:=(p->>'incidencia')::uuid;
   id_solicitud uuid:=(p->>'solicitud')::uuid;
   pagina integer:=coalesce((p->>'offset')::integer,0);
+  servicio date:=(p->>'fecha_servicio')::date;
+  revision date:=(p->>'proxima_revision')::date;
+  medidor numeric:=(p->>'lectura')::numeric;
+  detener boolean:=coalesce((p->>'detener')::boolean,false);
+  actual public.boss_mantenimiento%rowtype;
   evento text;
   marca timestamptz;
   filas jsonb;
@@ -135,18 +188,23 @@ begin
     return filas;
   end if;
 
-  if accion not in ('mantenimiento_reportar','mantenimiento_novedad','mantenimiento_cerrar')
+  if accion not in ('mantenimiento_reportar','mantenimiento_preventivo','mantenimiento_novedad','mantenimiento_cerrar')
      or id_evento is null or length(nota_evento)>500 then
     raise exception 'Revisa los datos de la incidencia.' using errcode='22023';
   end if;
-  if accion='mantenimiento_reportar' then
+  if accion in ('mantenimiento_reportar','mantenimiento_preventivo') then
     if length(nombre_equipo) not between 1 and 100 or length(motivo) not between 1 and 120 then
       raise exception 'Indica el equipo y la falla.' using errcode='22023';
     end if;
+    if accion='mantenimiento_preventivo' and (servicio is null or servicio>(now() at time zone 'America/Caracas')::date
+      or revision<servicio or medidor<0 or medidor>=1e10 or medidor<>round(medidor,2)) then
+      raise exception 'Revisa la fecha del mantenimiento, la próxima revisión y la lectura.' using errcode='22023';
+    end if;
     insert into public.boss_disponibilidad_equipos(clave,nombre,estado,actualizado_por)
-      values(clave_equipo,nombre_equipo,'Fuera de servicio',p_actor) on conflict on constraint boss_disponibilidad_equipos_pkey do nothing;
+      values(clave_equipo,nombre_equipo,case when accion='mantenimiento_reportar' then 'Fuera de servicio' else 'Operativo' end,p_actor)
+      on conflict on constraint boss_disponibilidad_equipos_pkey do nothing;
     id_incidencia:=id_evento;
-    evento:='Falla reportada';
+    evento:=case when accion='mantenimiento_reportar' then 'Falla reportada' else 'Preventivo' end;
     etapa_nueva:='Reportada';
   elsif accion='mantenimiento_novedad' then
     evento:='Novedad';
@@ -161,8 +219,9 @@ begin
   -- Mantiene el mismo orden de bloqueo que la edición desde Disponibilidad.
   perform 1 from public.boss_disponibilidad_equipos d where d.clave=clave_equipo for update;
   if not found then raise exception 'Equipo inválido.' using errcode='22023'; end if;
-  if exists (select 1 from public.boss_mantenimiento_eventos e where e.id=id_evento
-    and e.incidencia=id_incidencia and e.tipo=evento and e.actor=p_actor) then
+  if exists (select 1 from public.boss_mantenimiento_eventos e join public.boss_mantenimiento m on m.id=e.incidencia
+    where e.id=id_evento and m.equipo=clave_equipo and e.tipo=evento and e.actor=p_actor
+      and (accion='mantenimiento_reportar' or e.incidencia=id_incidencia)) then
     return '{}'::jsonb;
   end if;
   if id_solicitud is not null and (accion<>'mantenimiento_novedad' or not exists(
@@ -172,13 +231,28 @@ begin
   end if;
   marca:=clock_timestamp();
   if accion='mantenimiento_reportar' then
-    if exists(select 1 from public.boss_mantenimiento i where i.equipo=clave_equipo and i.cerrado_en is null) then
-      raise exception 'El equipo ya tiene una incidencia abierta. Agrega una novedad.' using errcode='22023';
+    select * into actual from public.boss_mantenimiento i where i.equipo=clave_equipo and i.cerrado_en is null;
+    if found then
+      if not actual.pendiente_detalle then
+        raise exception 'El equipo ya tiene un registro abierto. Agrega una novedad.' using errcode='22023';
+      end if;
+      id_incidencia:=actual.id;
+      update public.boss_mantenimiento set falla=motivo,pendiente_detalle=false where id=id_incidencia;
+    else
+      insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en)
+        values(id_incidencia,clave_equipo,motivo,etapa_nueva,marca);
+      update public.boss_disponibilidad_equipos d set estado='Fuera de servicio',actualizado_por=p_actor,actualizado_en=marca
+        where d.clave=clave_equipo and d.estado<>'Fuera de servicio';
     end if;
-    insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en)
-      values(id_incidencia,clave_equipo,motivo,etapa_nueva,marca);
-    update public.boss_disponibilidad_equipos d set estado='Fuera de servicio',actualizado_por=p_actor,actualizado_en=marca
-      where d.clave=clave_equipo and d.estado<>'Fuera de servicio';
+  elsif accion='mantenimiento_preventivo' then
+    if detener and exists(select 1 from public.boss_mantenimiento i where i.equipo=clave_equipo and i.cerrado_en is null) then
+      raise exception 'Ya hay un registro abierto para este equipo. Ciérralo antes de iniciar otro mantenimiento.' using errcode='22023';
+    end if;
+    insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,cerrado_en,preventivo,fecha_servicio,lectura,proxima_revision)
+      values(id_incidencia,clave_equipo,motivo,etapa_nueva,marca,case when not detener then marca end,true,servicio,medidor,revision);
+    if detener then
+      update public.boss_disponibilidad_equipos d set estado='En mantenimiento',actualizado_por=p_actor,actualizado_en=marca where d.clave=clave_equipo;
+    end if;
   else
     if not exists(select 1 from public.boss_mantenimiento i where i.id=id_incidencia and i.equipo=clave_equipo and i.cerrado_en is null) then
       raise exception 'La incidencia ya no está abierta. Actualiza la bitácora.' using errcode='22023';
@@ -209,6 +283,8 @@ declare
 begin
   datos:=jsonb_build_object('equipo',equipo,'nombre','Prueba bitácora','falla','Fuga','nota','Pérdida de presión',
     'accion','mantenimiento_reportar','id',incidente);
+  insert into public.boss_disponibilidad_equipos(clave,nombre,estado,actualizado_por)
+    values(equipo,'Prueba bitácora','Operativo','Admin');
   perform public.boss_mantenimiento_rpc('Admin',datos);
   perform public.boss_mantenimiento_rpc('Admin',datos);
   if (select estado from public.boss_disponibilidad_equipos where clave=equipo) is distinct from 'Fuera de servicio' then
@@ -243,6 +319,25 @@ begin
   if public.boss_mantenimiento_destino(null,'Vehículo','Van trasporte') is distinct from 'vehiculo:van-transporte'
      or public.boss_mantenimiento_destino(null,'Vehículo','Mitsubishi L-200') is distinct from 'vehiculo:mitsubishi-l200'
     then raise exception 'No se reconocieron los alias de solicitudes de vehículos'; end if;
+  update public.boss_disponibilidad_equipos set estado='Fuera de servicio' where clave=equipo;
+  select id into strict incidente from public.boss_mantenimiento where boss_mantenimiento.equipo=datos->>'equipo'
+    and cerrado_en is null and pendiente_detalle;
+  datos:=datos||jsonb_build_object('id',gen_random_uuid(),'falla','Falla completada');
+  perform public.boss_mantenimiento_rpc('Admin',datos);
+  perform public.boss_mantenimiento_rpc('Admin',datos);
+  if not exists(select 1 from public.boss_mantenimiento where id=incidente and falla='Falla completada' and not pendiente_detalle)
+    then raise exception 'Disponibilidad y la falla completada no quedaron enlazadas'; end if;
+  datos:=datos||jsonb_build_object('accion','mantenimiento_preventivo','id',gen_random_uuid(),'fecha_servicio',(now() at time zone 'America/Caracas')::date,'falla','Cambio de aceite');
+  perform public.boss_mantenimiento_rpc('Admin',datos);
+  if (select estado from public.boss_disponibilidad_equipos where clave=equipo) is distinct from 'Fuera de servicio'
+    then raise exception 'Registrar un preventivo modificó una falla abierta'; end if;
+  update public.boss_disponibilidad_equipos set estado='Operativo' where clave=equipo;
+  perform public.boss_mantenimiento_rpc('Admin',datos||jsonb_build_object('id',gen_random_uuid(),'detener',true));
+  if (select estado from public.boss_disponibilidad_equipos where clave=equipo) is distinct from 'En mantenimiento'
+    then raise exception 'El preventivo no actualizó la disponibilidad'; end if;
+  update public.boss_disponibilidad_equipos set estado='Operativo' where clave=equipo;
+  if exists(select 1 from public.boss_mantenimiento where boss_mantenimiento.equipo=datos->>'equipo' and cerrado_en is null)
+    then raise exception 'Disponibilidad no cerró el preventivo'; end if;
   raise exception using errcode='ZX002',message='Revertir datos de prueba de mantenimiento';
 exception when sqlstate 'ZX002' then null;
 end $test$;
