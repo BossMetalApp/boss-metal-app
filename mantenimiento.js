@@ -301,6 +301,7 @@
       equipment = catalog([]);
       fillEquipment();
     }
+    filter.value = '';
     return load();
   };
   window.actualizarMantenimiento = () => load();

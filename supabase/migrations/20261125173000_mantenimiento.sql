@@ -44,16 +44,37 @@ alter table public.boss_mantenimiento enable row level security;
 alter table public.boss_mantenimiento_eventos enable row level security;
 revoke all on public.boss_mantenimiento,public.boss_mantenimiento_eventos from public,anon,authenticated,service_role;
 
-with pendientes as (
-  insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,pendiente_detalle)
-  select gen_random_uuid(),d.clave,'Falla pendiente de describir','Reportada',d.actualizado_en,true
-  from public.boss_disponibilidad_equipos d where d.estado='Fuera de servicio'
-  on conflict (equipo) where cerrado_en is null do nothing
-  returning id,equipo,abierto_en
-)
-insert into public.boss_mantenimiento_eventos(id,incidencia,tipo,nota,actor,fecha)
-select gen_random_uuid(),p.id,'Novedad','Fuera de servicio según Disponibilidad de equipos.',d.actualizado_por,p.abierto_en
-from pendientes p join public.boss_disponibilidad_equipos d on d.clave=p.equipo;
+create or replace function public.boss_mantenimiento_reconciliar(p_equipo text)
+returns void language sql security definer set search_path=pg_catalog as $$
+  with desactualizados as materialized (
+    select d.clave,d.actualizado_en,d.actualizado_por
+    from public.boss_disponibilidad_equipos d
+    where d.estado='Fuera de servicio'
+      and (p_equipo is null or d.clave=p_equipo or (p_equipo='vehiculos' and d.clave like 'vehiculo:%'))
+      and not exists(select 1 from public.boss_mantenimiento i where i.equipo=d.clave and i.cerrado_en is null)
+    order by d.clave
+    for update of d
+  ), pendientes as (
+    insert into public.boss_mantenimiento(id,equipo,falla,etapa,abierto_en,pendiente_detalle)
+    select gen_random_uuid(),d.clave,'Falla pendiente de describir','Reportada',d.actualizado_en,true
+    from desactualizados d
+    on conflict (equipo) where cerrado_en is null do nothing
+    returning id,equipo,abierto_en
+  )
+  insert into public.boss_mantenimiento_eventos(id,incidencia,tipo,nota,actor,fecha)
+  select gen_random_uuid(),p.id,'Novedad','Fuera de servicio según Disponibilidad de equipos.',d.actualizado_por,p.abierto_en
+  from pendientes p join desactualizados d on d.clave=p.equipo;
+$$;
+revoke all on function public.boss_mantenimiento_reconciliar(text) from public,anon,authenticated;
+select public.boss_mantenimiento_reconciliar(null);
+
+do $$
+begin
+  if exists(
+    select 1 from public.boss_disponibilidad_equipos d where d.estado='Fuera de servicio'
+      and not exists(select 1 from public.boss_mantenimiento i where i.equipo=d.clave and i.cerrado_en is null)
+  ) then raise exception 'Quedaron equipos fuera de servicio sin incidencia abierta.'; end if;
+end $$;
 
 create or replace function public.boss_mantenimiento_abrir_disponibilidad()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
@@ -149,6 +170,7 @@ begin
   end if;
   if accion='mantenimiento_listar' then
     if pagina<0 then raise exception 'Página inválida.' using errcode='22023'; end if;
+    if pagina=0 then perform public.boss_mantenimiento_reconciliar(clave_equipo); end if;
     with ultimas as (
       select i.*
       from public.boss_mantenimiento i
@@ -338,6 +360,15 @@ begin
   update public.boss_disponibilidad_equipos set estado='Operativo' where clave=equipo;
   if exists(select 1 from public.boss_mantenimiento where boss_mantenimiento.equipo=datos->>'equipo' and cerrado_en is null)
     then raise exception 'Disponibilidad no cerró el preventivo'; end if;
+  update public.boss_disponibilidad_equipos set estado='Fuera de servicio' where clave=equipo;
+  select i.id into strict incidente from public.boss_mantenimiento i where i.equipo=datos->>'equipo' and i.cerrado_en is null;
+  delete from public.boss_mantenimiento_eventos where incidencia=incidente;
+  delete from public.boss_mantenimiento where id=incidente;
+  resultado:=public.boss_mantenimiento_rpc('Admin',jsonb_build_object('accion','mantenimiento_listar','equipo',equipo));
+  if resultado#>>'{incidencias,0,pendiente_detalle}' is distinct from 'true'
+     or (resultado#>>'{incidencias,0,abierto_en}')::timestamptz is distinct from
+       (select actualizado_en from public.boss_disponibilidad_equipos where clave=equipo)
+  then raise exception 'La bitácora no recuperó el estado de Disponibilidad al consultar'; end if;
   raise exception using errcode='ZX002',message='Revertir datos de prueba de mantenimiento';
 exception when sqlstate 'ZX002' then null;
 end $test$;
