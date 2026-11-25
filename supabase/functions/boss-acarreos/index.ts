@@ -230,6 +230,17 @@ Deno.serve(async (req) => {
       return reply({ok:true});
     }
 
+    if (["mantenimiento_listar", "mantenimiento_solicitudes", "mantenimiento_reportar",
+         "mantenimiento_novedad", "mantenimiento_cerrar"].includes(body?.accion)) {
+      etapa = "mantenimiento";
+      const {data,error} = await db.rpc("boss_mantenimiento_rpc",{p_actor:account.usuario,p:body});
+      if (error?.code==="42501") return reply({ok:false,mensaje:"Acceso restringido."},403);
+      if (error?.code==="22023") return reply({ok:false,mensaje:error.message},400);
+      if (error?.code.startsWith("22")) return reply({ok:false,mensaje:"Revisa los datos de mantenimiento."},400);
+      if (error) throw error;
+      return reply({ok:true,resultado:data});
+    }
+
     if (body?.accion === "disponibilidad_listar" || body?.accion === "disponibilidad_guardar") {
       etapa = "disponibilidad";
       const table = "boss_disponibilidad_equipos";

@@ -48,6 +48,7 @@ jobs:
             cat supabase/migrations/20261122190000_aviso_estado_material.sql
             cat supabase/migrations/20261124090000_nomina_convocatoria_guardias.sql
             cat supabase/migrations/20261125160000_cortes_acarreo.sql
+            cat supabase/migrations/20261125173000_mantenimiento.sql
             cat <<'SQL'
           do $$
           declare
