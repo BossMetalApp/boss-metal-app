@@ -138,6 +138,20 @@ Deno.serve(async (req) => {
       if(error)throw error;
       return reply({ok:true,gastos:data});
     }
+    if (["cortes_listar","cortes_consultar","cortes_cerrar","cortes_abonar"].includes(body?.accion)) {
+      if (account.usuario !== "Admin") return reply({ok:false,mensaje:"Solo Admin puede consultar o registrar cortes de acarreo."},403);
+      etapa = "cortes_acarreo";
+      const {accion,desde,hasta,fecha}=body;
+      const validPeriod=validDate(desde) && validDate(hasta) && desde<=hasta;
+      if ((["cortes_consultar","cortes_cerrar"].includes(accion) && !validPeriod) ||
+          (accion==="cortes_abonar" && !validDate(fecha)))
+        return reply({ok:false,mensaje:"Revisa las fechas."},400);
+      const {data,error}=await db.rpc("boss_cortes_acarreo_rpc",{p:body});
+      if (error?.code==="22023") return reply({ok:false,mensaje:error.message},400);
+      if (error?.code.startsWith("22")) return reply({ok:false,mensaje:"Revisa los datos del corte o del abono."},400);
+      if (error) throw error;
+      return reply({ok:true,resultado:data});
+    }
     if (["balance_produccion","balance_registrar_trabajo"].includes(body?.accion)) {
       if (account.usuario !== "Admin") return reply({ok:false,mensaje:"Solo Admin puede consultar Producción y balance."},403);
       etapa = "balance_produccion";
