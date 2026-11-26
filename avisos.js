@@ -41,23 +41,57 @@
     if (!panel.hidden) load();
   };
   more.onclick = () => load(true);
+  function supportsPush() {
+    return 'PushManager' in window && 'Notification' in window && 'serviceWorker' in navigator;
+  }
+
+  function matchesKey(subscription, key) {
+    const current = subscription.options?.applicationServerKey;
+    if (!current) return true;
+    const bytes = new Uint8Array(current);
+    return bytes.length === key.length && bytes.every((byte,index) => byte === key[index]);
+  }
+
+  async function syncPush(session, interactive) {
+    if (!supportsPush()) {
+      if (interactive) throw Error('En iPhone, agrega la app a la pantalla de inicio y ábrela desde su ícono.');
+      return;
+    }
+    const permission = interactive && Notification.permission !== 'granted'
+      ? await Notification.requestPermission() : Notification.permission;
+    if (permission !== 'granted') {
+      if (interactive) throw Error('Para recibir avisos, permite las notificaciones en los ajustes de este dispositivo.');
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription && !interactive) return;
+    const {clave} = await requestProduction(session,{accion:'push_clave'});
+    const key = Uint8Array.from(atob(clave.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+    if (session !== bossSession) return;
+    if (subscription && !matchesKey(subscription,key)) {
+      if (!interactive) {
+        status.textContent = 'Toca Activar avisos en este teléfono para reconectar los avisos.';
+        return;
+      }
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+    }
+    if (session !== bossSession) return;
+    await requestProduction(session,{accion:'push_activar',suscripcion:subscription.toJSON()});
+    if (session === bossSession) status.textContent = 'Avisos activados en este teléfono.';
+  }
+
   activate.onclick = async () => {
     const session = bossSession;
     if (!session) return;
     activate.disabled = true;
     try {
-      if (!('PushManager' in window) || !('Notification' in window) || !('serviceWorker' in navigator))
-        throw Error('En iPhone, agrega la app a la pantalla de inicio y ábrela desde su ícono.');
-      if (await Notification.requestPermission() !== 'granted') throw Error('Para recibir avisos, permite las notificaciones en los ajustes de este dispositivo.');
-      const registration = await navigator.serviceWorker.ready;
-      let sub = await registration.pushManager.getSubscription();
-      if (!sub) {
-        const {clave} = await requestProduction(session,{accion:'push_clave'});
-        const bytes = Uint8Array.from(atob(clave.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
-        sub = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
-      }
-      await requestProduction(session,{accion:'push_activar',suscripcion:sub.toJSON()});
-      if (session === bossSession) status.textContent = 'Avisos activados en este teléfono.';
+      await syncPush(session,true);
     } catch (e) { if (session === bossSession) status.textContent = e.message; }
     finally { activate.disabled = false; }
   };
@@ -68,6 +102,10 @@
   window.startBossAvisos = () => {
     if (location.hash === '#avisos') { panel.hidden=false; bell.setAttribute('aria-expanded','true'); }
     load();
+    const session = bossSession;
+    if (session) syncPush(session,false).catch(e => {
+      if (session === bossSession) status.textContent = e.message;
+    });
   };
   navigator.serviceWorker?.addEventListener('message',e=>{
     if (e.data==='abrir-avisos' && bossSession) { panel.hidden=false; bell.setAttribute('aria-expanded','true'); load(); bell.scrollIntoView(); }
