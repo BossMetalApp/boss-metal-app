@@ -1,18 +1,3 @@
--- Solo estados técnicos del servicio, sin publicar credenciales ni datos de la operación.
-select jsonb_build_object(
-  'tarea_activa',exists(select 1 from cron.job where jobname='boss-avisos' and active),
-  'respuestas_recientes',coalesce((
-    select jsonb_object_agg(result,quantity)
-    from (
-      select case when timed_out then 'tiempo_agotado'
-                  when status_code is null then 'sin_respuesta'
-                  else status_code::text end as result,count(*) as quantity
-      from net._http_response where created>now()-interval '60 minutes'
-      group by 1
-    ) r
-  ),'{}'::jsonb)
-) as diagnostico_entrega;
-
 select cron.schedule('boss-avisos','* * * * *',$job$
   select public.boss_revisar_turnos();
   select net.http_post(
@@ -65,3 +50,22 @@ begin
   raise exception using errcode='ZX002',message='Revertir verificación de avisos';
 exception when sqlstate 'ZX002' then null;
 end $test$;
+
+-- Solo estados técnicos del servicio, sin publicar credenciales ni datos de la operación.
+select jsonb_build_object(
+  'tarea_activa',exists(select 1 from cron.job where jobname='boss-avisos' and active),
+  'ultima_ejecucion',(
+    select r.status from cron.job_run_details r join cron.job j on j.jobid=r.jobid
+    where j.jobname='boss-avisos' order by r.runid desc limit 1
+  ),
+  'respuestas_recientes',coalesce((
+    select jsonb_object_agg(result,quantity)
+    from (
+      select case when timed_out then 'tiempo_agotado'
+                  when status_code is null then 'sin_respuesta'
+                  else status_code::text end as result,count(*) as quantity
+      from net._http_response where created>now()-interval '60 minutes'
+      group by 1
+    ) r
+  ),'{}'::jsonb)
+) as diagnostico_entrega;
