@@ -9,7 +9,9 @@ on:
       - 'supabase/migrations/20261124090000_nomina_convocatoria_guardias.sql'
       - 'supabase/migrations/20261125160000_cortes_acarreo.sql'
       - 'supabase/migrations/20261125173000_mantenimiento.sql'
+      - 'supabase/migrations/20261126180000_avisos_solicitudes.sql'
       - 'supabase/functions/boss-acarreos/index.ts'
+      - 'supabase/functions/boss-push/index.ts'
   workflow_dispatch:
 concurrency:
   group: boss-metal-supabase
@@ -29,8 +31,9 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          cat supabase/migrations/20261122230000_gastos.sql supabase/migrations/20261122233000_reposiciones.sql supabase/migrations/20261123190000_balance_produccion.sql supabase/migrations/20261124090000_nomina_convocatoria_guardias.sql supabase/migrations/20261125160000_cortes_acarreo.sql supabase/migrations/20261125173000_mantenimiento.sql | jq -Rs '{query: .}' |
+          cat supabase/migrations/20261122230000_gastos.sql supabase/migrations/20261122233000_reposiciones.sql supabase/migrations/20261123190000_balance_produccion.sql supabase/migrations/20261124090000_nomina_convocatoria_guardias.sql supabase/migrations/20261125160000_cortes_acarreo.sql supabase/migrations/20261125173000_mantenimiento.sql supabase/migrations/20261126180000_avisos_solicitudes.sql | jq -Rs '{query: .}' |
             curl --fail-with-body --silent --show-error -X POST \
               -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' \
               --data-binary @- "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query"
+          supabase functions deploy boss-push --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF" --yes
           supabase functions deploy boss-acarreos --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF" --yes
