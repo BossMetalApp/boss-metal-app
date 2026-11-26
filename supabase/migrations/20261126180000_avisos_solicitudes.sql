@@ -31,22 +31,28 @@ for each row when (
 do $test$
 declare
   prueba uuid:=gen_random_uuid();
-  destino text:='prueba:'||prueba;
+  supervisor text:='PruebaAviso_'||substr(prueba::text,1,8);
+  destinatarios text[]:=array['Admin','Admin2',supervisor];
+  destinatario text;
   estados text[]:=array['Aprobada','Entregada','Rechazada'];
   siguiente text;
 begin
+  perform public.boss_crear_supervisor(supervisor,'0000');
   insert into public.boss_push_dispositivos(endpoint,usuario,auth,p256dh)
-    values(destino,'Admin','simulado','simulado');
+    select 'prueba:'||prueba||':'||usuario,usuario,'simulado','simulado' from unnest(destinatarios) usuario;
   insert into public.boss_solicitudes_materiales(id,solicitado_por,categoria,descripcion,cantidad)
-    values(prueba,'Prueba','Repuestos','Prueba temporal',1);
+    values(prueba,supervisor,'Repuestos','Prueba temporal',1);
   foreach siguiente in array estados loop
     update public.boss_solicitudes_materiales set estado=siguiente where id=prueba;
   end loop;
   update public.boss_solicitudes_materiales set descripcion='Prueba actualizada' where id=prueba;
   update public.boss_solicitudes_materiales set estado='Rechazada',actualizado_en=clock_timestamp() where id=prueba;
-  if (select count(*) from public.boss_avisos a join public.boss_push_entregas e on e.aviso=a.id
-    where e.endpoint=destino and (a.clave='material:'||prueba or a.clave like 'material-estado:'||prueba||':%'))<>5
-    then raise exception 'La solicitud y sus cambios no encolaron exactamente cinco avisos'; end if;
+  foreach destinatario in array destinatarios loop
+    if (select count(*) from public.boss_avisos a join public.boss_push_entregas e on e.aviso=a.id
+      where e.endpoint='prueba:'||prueba||':'||destinatario
+        and (a.clave='material:'||prueba or a.clave like 'material-estado:'||prueba||':%'))<>5
+      then raise exception 'La solicitud y sus cambios no encolaron exactamente cinco avisos para cada rol'; end if;
+  end loop;
   raise exception using errcode='ZX002',message='Revertir verificación de avisos';
 exception when sqlstate 'ZX002' then null;
 end $test$;
