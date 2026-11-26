@@ -53,6 +53,9 @@ end $test$;
 
 -- Solo estados técnicos del servicio, sin publicar credenciales ni datos de la operación.
 select jsonb_build_object(
+  'clave_configurada',exists(select 1 from public.boss_push_config where publica is not null and privada is not null),
+  'admin_con_dispositivo',exists(select 1 from public.boss_push_dispositivos where usuario='Admin'),
+  'hay_entregas_pendientes',exists(select 1 from public.boss_push_entregas),
   'tarea_activa',exists(select 1 from cron.job where jobname='boss-avisos' and active),
   'ultima_ejecucion',(
     select r.status from cron.job_run_details r join cron.job j on j.jobid=r.jobid
