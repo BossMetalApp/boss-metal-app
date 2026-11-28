@@ -1,0 +1,66 @@
+name: Verificar totales de producción
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verificar-produccion.yml'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: syixumzybwcqumaszzqa
+    steps:
+      - name: Comparar Tablero y Gráficas con los registros compartidos
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          cat <<'SQL' | jq -Rs '{query: .}' |
+          begin isolation level repeatable read read only;
+          do $$
+          declare
+            fecha_operativa date:=((now() at time zone 'America/Caracas')-interval '7 hours')::date;
+            inicio date;
+            fin date;
+            resumen jsonb;
+            graficas jsonb;
+            viajes numeric;
+            toneladas numeric;
+            dias integer;
+          begin
+            for inicio,fin in
+              select * from (values (fecha_operativa,fecha_operativa),
+                (fecha_operativa-6,fecha_operativa),
+                (date_trunc('month',fecha_operativa)::date,fecha_operativa),
+                (fecha_operativa-365,fecha_operativa)) rangos
+            loop
+              resumen:=public.boss_resumen_operacion(inicio,fin);
+              graficas:=public.boss_graficas_produccion(inicio,fin);
+              select coalesce(sum((fila->>4)::numeric),0),coalesce(sum((fila->>5)::numeric),0),
+                     count(distinct fila->>0) filter (where (fila->>4)::numeric>0)
+              into viajes,toneladas,dias from jsonb_array_elements(graficas) fila;
+              if (resumen->>'viajes')::numeric is distinct from viajes or
+                 (resumen->>'toneladas')::numeric is distinct from toneladas or
+                 (resumen->>'dias')::integer is distinct from dias then
+                raise exception 'Los totales de Tablero y Gráficas no coinciden para el mismo período.';
+              end if;
+              if exists (
+                select 1 from jsonb_array_elements(resumen->'equipos') equipo
+                where (equipo->>'toneladas')::numeric is distinct from (
+                  select sum((fila->>5)::numeric) from jsonb_array_elements(graficas) fila where fila->>2=equipo->>'unidad'
+                )
+              ) or exists (
+                select 1 from jsonb_array_elements(resumen->'turnos') turno
+                where (turno->>'toneladas')::numeric is distinct from (
+                  select sum((fila->>5)::numeric) from jsonb_array_elements(graficas) fila where fila->>1=turno->>'turno'
+                )
+              ) then raise exception 'Los subtotales por volqueta o turno no coinciden.'; end if;
+            end loop;
+          end $$;
+          commit;
+          SQL
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+              --data-binary @- "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query"
