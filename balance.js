@@ -121,10 +121,17 @@
     for (const [label, expenses] of [[row.general ? 'Nómina' : 'Nómina directa', payroll], ['Otros gastos', other]]) {
       if (!expenses.length) continue;
       const subtotal = expenses.reduce((sum, expense) => sum + cents(expense.monto), 0);
-      root.append(text('h4', label + ' · ' + money(subtotal)));
-      const list = document.createElement('ul');
-      for (const expense of expenses) list.append(text('li', [dateLabel(expense.fecha), expense.vehiculo, expense.partida, expense.concepto, money(cents(expense.monto))].filter(Boolean).join(' · ')));
-      root.append(list);
+      const group = document.createElement('details');
+      group.className = 'balance-gastos';
+      const summary = document.createElement('summary');
+      summary.append(text('strong', label), text('strong', money(subtotal)));
+      group.append(summary);
+      const movements = expenses.map(expense => [
+        expense.fecha, expense.concepto, Number(expense.monto),
+        [expense.vehiculo, expense.partida].filter(Boolean).join(' · '),
+      ]);
+      window.bossGastos.renderExpenseDays(group, movements, true);
+      root.append(group);
     }
     if (!row.gastos.length) root.append(text('p', 'Sin gastos en este período.'));
     return root;

@@ -36,7 +36,7 @@ function bounds(date,mode){
   if(mode==='Mensual')return [prefix+'01',prefix+last];
   return day<=15?[prefix+'01',prefix+'15']:[prefix+'16',prefix+last];
 }
-window.bossGastos = {periodo:bounds, normalizarDestino, vehiculo};
+window.bossGastos = {periodo:bounds, normalizarDestino, vehiculo, renderExpenseDays};
 function renderExpenseDays(parent,items,showCategory=false){
   if(!items.length){
     parent.append(text('small','Sin gastos en este período.'));
